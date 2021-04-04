@@ -1,4 +1,5 @@
 import { exists } from "https://deno.land/std/fs/mod.ts";
+import { base62 } from "./base62.ts";
 
 const readJson = async (path: string) => JSON.parse(await Deno.readTextFile(path));
 const writeJson = async (path: string, obj: any) => await Deno.writeTextFile(path, JSON.stringify(obj, null, 2));
@@ -11,7 +12,6 @@ export interface Vote {
 export interface Poll {
     TimeSec: number,
     ChatId: number,
-    LawId: string,
     Minutes: number,
     Name: string,
     Desc: string,
@@ -42,9 +42,9 @@ export interface Chat {
     Laws: Law[],
 }
 
-export const secNow = () => Math.floor(Date.now() / 1000);
-export const n2id = (n: number) => n.toString(36).toUpperCase();
-export const id2n = (id: string) => parseInt(id, 36);
+export const secNow = () => Math.floor((Date.now() - Date.UTC(2021, 3, 1)) / 1000);
+export const n2id = base62.encode;
+export const id2n = base62.decode;
 
 
 async function getChat (chatId: number):

@@ -3,15 +3,15 @@ import { Bot, Context } from "https://deno.land/x/telegram@v0.1.1/mod.ts";
 import { State } from "https://deno.land/x/telegram@v0.1.1/context.ts";
 import { castVote, newPoll, logUser, Poll, getLaws, Law, newLaw, VoteStatus, getUserPolls, n2id, secNow, getPoll, instanceOfPoll, pollIsOpen } from "./db.ts";
 
-const pollIdRegex = /^\[([A-Z0-9]+)\]/;
-const lawIdRegex = /\(?([A-Z0-9]+-[A-Z0-9]+)/;
+const pollIdRegex = /^\[([0-9a-zA-Z]+)\]/;
+const lawIdRegex = /\(?([0-9a-zA-Z]+)/;
 
 const repeat = (x: any, n: number): any[] => n < 1 ? [] : [...new Array(Math.floor(n))].map(_ => x);
 const repeatStr = (x: any, n: number): string => repeat(x, n).join("");
 const plural = (n: number, w: string) => `${n} ${w.replace("_", n != 1 ? "s" : "")}`;
 const drop1stLine = (lines: string): string => lines.split("\n").slice(1).join("\n");
 const showChoiceAmount = (n: number, width: number): string => unicodeHorizontalBar(width, n / width);
-const lawText = (l: Law, chatId: number) => `<code>(${n2id(chatId)}-${n2id(l.TimeSec)})</code> <b>${l.Name}</b>: ${l.Body}`;
+const lawText = (law: Law) => `<code>(${n2id(law.TimeSec)})</code> <b>${law.Name}</b>: ${law.Body}`;
 
 type ShowPollOptions = {options?: boolean, desc?: boolean, amounts?: boolean}
 function pollText (poll: Poll, show: ShowPollOptions, amounts: number[] = []) {
@@ -50,11 +50,9 @@ async function handlePoll(input: string, ctx: Ctx): Promise<string> {
         const times: {[key: string]: number} = {m, h, d, M, y};
         return min + (parseInt(n) * (times[t] || 0));
     }, 0);
-    const lawIdRegex = /^\(.+?\)/;
     const poll: Poll = {
         TimeSec: secNow(),
         ChatId: ctx.chatId,
-        LawId: name.match(lawIdRegex)?.groups?.$1 || "",
         Minutes: minutes,
         Name: name.replace(lawIdRegex, "").trim(),
         Desc: desc,
@@ -128,7 +126,7 @@ async function handleNewLaw(input: string, ctx: Ctx): Promise<string> {
         Body: body.join("\n"),
     };
     newLaw(ctx.chatId, law);
-    return lawText(law, ctx.chatId);
+    return lawText(law);
 }
 
 
