@@ -8,7 +8,7 @@ export interface Vote {
     Choices: number[],
 }
 
-export interface Ballot {
+export interface Poll {
     TimeSec: number,
     ChatId: number,
     LawId: string,
@@ -20,7 +20,7 @@ export interface Ballot {
     Votes: {[voterId: number]: Vote},
 }
 
-export const instanceOfBallot = (obj: any): obj is Ballot => obj.hasOwnProperty("Votes");
+export const instanceOfPoll = (obj: any): obj is Poll => obj.hasOwnProperty("Votes");
 
 export interface Law {
     TimeSec: number,
@@ -30,9 +30,9 @@ export interface Law {
 
 export enum VoteStatus {
     Success = "Vote cast successfully",
-    Unauthorised = "You must message on the chat this ballot was created, after its creation",
-    Expired = "This ballot expired",
-    Nonexist = "Ballot does not exist",
+    Unauthorised = "You must message on the chat this poll was created, after its creation",
+    Expired = "This poll expired",
+    Nonexist = "Poll does not exist",
     InvalidNumOptions = "Invalid number of options",
 }
 
@@ -60,58 +60,58 @@ async function getChat (chatId: number):
 }
 
 
-export async function getBallot (ballotId: string):
-  Promise<{ballot: Ballot | null, write: ((ballot: Ballot) => Promise<void>)}> {
-    const fileName = `db/ballot-${ballotId}.json`;
+export async function getPoll (pollId: string):
+  Promise<{poll: Poll | null, write: ((poll: Poll) => Promise<void>)}> {
+    const fileName = `db/poll-${pollId}.json`;
     return {
-        ballot: await exists(fileName) ? await readJson(fileName) as Ballot : null,
-        write: async (ballot: Ballot) => await writeJson(fileName, ballot),
+        poll: await exists(fileName) ? await readJson(fileName) as Poll : null,
+        write: async (poll: Poll) => await writeJson(fileName, poll),
     }
 }
 
 
-export async function newBallot(ballot: Ballot) {
-    const fileName = `db/ballot-${n2id(ballot.TimeSec)}.json`;
-    await writeJson(fileName, ballot);
+export async function newPoll(poll: Poll) {
+    const fileName = `db/poll-${n2id(poll.TimeSec)}.json`;
+    await writeJson(fileName, poll);
 }
 
 
-export async function castVote(ballotId: string, userId: number, choices: number[]):
-  Promise<VoteStatus | Ballot> {
-    const {ballot, write} = await getBallot(ballotId);
-    if (!ballot) {
+export async function castVote(pollId: string, userId: number, choices: number[]):
+  Promise<VoteStatus | Poll> {
+    const {poll, write} = await getPoll(pollId);
+    if (!poll) {
         return VoteStatus.Nonexist;
     }
-    if (!ballotIsOpen(ballot)) {
+    if (!pollIsOpen(poll)) {
         return VoteStatus.Expired;
     }
-    if (!await userCanVote(ballot, userId)) {
+    if (!await userCanVote(poll, userId)) {
         return VoteStatus.Unauthorised;
     }
-    if (choices.length != ballot.Options.length) {
+    if (choices.length != poll.Options.length) {
         return VoteStatus.InvalidNumOptions;
     }
     const vote: Vote = {
         TimeSec: secNow(),
         Choices: choices,
     };
-    ballot.Votes[userId] = vote;
-    await write(ballot);
-    return ballot;
+    poll.Votes[userId] = vote;
+    await write(poll);
+    return poll;
 }
 
 
-export async function getBallots(chatId: number = 0): Promise<Ballot[]> {
-    const files = [...Deno.readDirSync("./db")].filter(d => d.isFile && d.name.startsWith("ballot"));
-    const ballots = await Promise.all(files.map(async f => await readJson(`db/${f.name}`) as Ballot));
-    return chatId ? ballots.filter(b => b.ChatId == chatId): ballots;
+export async function getPolls(chatId: number = 0): Promise<Poll[]> {
+    const files = [...Deno.readDirSync("./db")].filter(d => d.isFile && d.name.startsWith("poll"));
+    const polls = await Promise.all(files.map(async f => await readJson(`db/${f.name}`) as Poll));
+    return chatId ? polls.filter(b => b.ChatId == chatId): polls;
 }
 
 
-export async function getUserBallots(userId: number): Promise<Ballot[]> {
-    const ballots = await getBallots();
-    const approvals = await Promise.all(ballots.map(async b => await userCanVote(b, userId)));
-    return ballots.filter((_, index) => approvals[index]);
+export async function getUserPolls(userId: number): Promise<Poll[]> {
+    const polls = await getPolls();
+    const approvals = await Promise.all(polls.map(async b => await userCanVote(b, userId)));
+    return polls.filter((_, index) => approvals[index]);
 }
 
 
@@ -133,11 +133,11 @@ export async function newLaw(chatId: number, law: Law) {
 }
 
 
-export const ballotIsOpen = (ballot: Ballot): boolean => secNow() < ballot.TimeSec + (ballot.Minutes * 60);
+export const pollIsOpen = (poll: Poll): boolean => secNow() < poll.TimeSec + (poll.Minutes * 60);
 
 
-export async function userCanVote(ballot: Ballot, userId: number): Promise<boolean> {
-    const fileName = `db/chat-${ballot.ChatId}.json`;
+export async function userCanVote(poll: Poll, userId: number): Promise<boolean> {
+    const fileName = `db/chat-${poll.ChatId}.json`;
     if (!(await exists(fileName))) {
         return false;
     }
@@ -146,5 +146,5 @@ export async function userCanVote(ballot: Ballot, userId: number): Promise<boole
         return false;
     }
     const lastSeen = users[userId];
-    return lastSeen < ballot.TimeSec + (ballot.Minutes * 60);
+    return lastSeen < poll.TimeSec + (poll.Minutes * 60);
 }
