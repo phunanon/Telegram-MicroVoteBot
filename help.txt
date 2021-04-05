@@ -1,29 +1,37 @@
 /newpoll
-  Creates a new poll.
+Creates a new poll. Put details about the poll on different lines like this:
 /newpoll [Period e.g. 5m 1h 1d 2M 1y]
-[optional LawID e.g. (123)] [Name]
+[Name]
 [Description] or [blank line]
 [Option one]
 ...
 [Option N]
 
+Options can begin with a Law ID such as <code>(QR086A)</code> to enable or disable a law by majority vote.
+
+
 /result
-  Shows result for a poll. 
-/result [PollID e.g. [1234ABC]]
+Shows result for a poll. Either use "/result" in reply to a poll message or:
+/result [Poll ID e.g. <code>[1234ABC]</code>]
+
 
 /vote
-nothing
+TODO
+
 
 /mine
-nothing
+TODO
+
 
 /law
-nothing
+TODO
+
 
 /newlaw
-  Creates a new law in this chat.
+Creates a new law in this chat.
 /newlaw [Name]
 [Legislation body]
 
+
 /laws
-  Shows all the laws in this chat.
+Shows all the laws in this chat.

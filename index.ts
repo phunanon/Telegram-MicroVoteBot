@@ -1,29 +1,30 @@
 import { config } from "https://deno.land/x/dotenv/mod.ts";
 import { Bot, Context } from "https://deno.land/x/telegram@v0.1.1/mod.ts";
 import { State } from "https://deno.land/x/telegram@v0.1.1/context.ts";
-import { castVote, newPoll, logUser, Poll, getLaws, Law, newLaw, VoteStatus, getUserPolls, n2id, secNow, getPoll, instanceOfPoll, pollIsOpen } from "./db.ts";
+import { castVote, newPoll, logUser, Poll, getLaws, Law, newLaw, VoteStatus, getUserPolls, n2id, secNow, getPoll, instanceOfPoll, pollIsOpen, id2n, getLaw, getPollResult } from "./db.ts";
 
 const pollIdRegex = /^\[([0-9a-zA-Z]+)\]/;
-const lawIdRegex = /\(?([0-9a-zA-Z]+)/;
+const lawIdRegex = /^\(?([0-9a-zA-Z]+)/;
 
 const repeat = (x: any, n: number): any[] => n < 1 ? [] : [...new Array(Math.floor(n))].map(_ => x);
 const repeatStr = (x: any, n: number): string => repeat(x, n).join("");
 const plural = (n: number, w: string) => `${n} ${w.replace("_", n != 1 ? "s" : "")}`;
 const drop1stLine = (lines: string): string => lines.split("\n").slice(1).join("\n");
 const showChoiceAmount = (n: number, width: number): string => unicodeHorizontalBar(width, n / width);
-const lawText = (law: Law) => `<code>(${n2id(law.TimeSec)})</code> <b>${law.Name}</b>: ${law.Body}`;
 
 type ShowPollOptions = {options?: boolean, desc?: boolean, amounts?: boolean}
 function pollText (poll: Poll, show: ShowPollOptions, amounts: number[] = []) {
     const options = show.amounts
         ? poll.Options.map((o, i) => ({text: o, i, amount: amounts[i]}))
-                        .sort((a, b) => b.amount - a.amount)
+                      .sort((a, b) => b.amount - a.amount)
         : poll.Options.map((o, i) => ({text: o, i, amount: i}));
     return `<code>[${n2id(poll.TimeSec)}]</code> <b>${poll.Name}</b>` +
         (show.desc ? `\n${poll.Desc}` : "") +
         (show.options ? options.map(opt =>
             `\n<code>${show.amounts ? `${showChoiceAmount(opt.amount, poll.Width)} ${opt.amount.toFixed(2)}` : ""} </code> ${opt.i+1}. ${opt.text}`).join("") : "");
 }
+
+const lawText = (law: Law) => `<code>(${n2id(law.TimeSec)})</code> <b>${law.Name}</b>: ${law.Body}`;
 
 const unicodeHorizontalBar = (width: number, fraction: number) => {
     fraction = Math.min(1, Math.max(fraction, 0));
@@ -40,7 +41,8 @@ const sendMessage = async (ctx: Context<State>, text: string) => await ctx.teleg
 
 
 async function handlePoll(input: string, ctx: Ctx): Promise<string> {
-    let [period, name, desc, ...options] = input.split("\n");
+    let [period, name, desc, ...options] = input.split("\n").map(str => str.trim());
+    console.log(name);
     if (!period || !name || !desc || !options.length) {
         return await helpFor("poll");
     }
@@ -54,13 +56,14 @@ async function handlePoll(input: string, ctx: Ctx): Promise<string> {
         TimeSec: secNow(),
         ChatId: ctx.chatId,
         Minutes: minutes,
-        Name: name.replace(lawIdRegex, "").trim(),
+        Name: name,
         Desc: desc,
         Options: options,
         Width: 5,
         Votes: {},
     };
-    newPoll(poll);
+    const laws = options.filter(o => lawIdRegex.test(o)).map( o => o.match(lawIdRegex)?.[1] ?? "");
+    newPoll(poll, laws.map(i => id2n(i)));
     return `${pollText(poll, {})}\nYou must message in this chat prior to casting your vote, then use /mine in <a href="https://t.me/MicroVoteBot">this chat</a>.`;
 }
 
@@ -71,7 +74,7 @@ async function handleVote(input: string, pollId: string, userId: number): Promis
     if (choiceNums.includes(Number.NaN)) {
         return "Please use only whole numbers to express your choice for a candidate.";
     }
-    const pollOrStatus = await castVote(pollId, userId, choiceNums);
+    const pollOrStatus = await castVote(id2n(pollId), userId, choiceNums);
     if (instanceOfPoll(pollOrStatus)) {
         return `${pollText(pollOrStatus, {options: true, amounts: true}, choiceNums)}\n${VoteStatus.Success}.`;
     }
@@ -81,17 +84,18 @@ async function handleVote(input: string, pollId: string, userId: number): Promis
 
 async function handleResult(input: string): Promise<string> {
     const pollId = input.match(pollIdRegex)?.[1];
-    const {poll} = await getPoll(pollId ?? "");
+    if (!pollId) {
+        return "Invalid Poll ID.";
+    }
+    const {poll} = await getPoll(id2n(pollId));
     if (poll == null) {
         return "Poll not found.";
     }
     if (pollIsOpen(poll) && false) {
         return "This poll is still open; results can only be provided once the poll closes.";
     }
-    const votes = Object.values(poll.Votes);
-    const sums = votes.reduce((sums, v) => sums.map((s, i) => s + v.Choices[i]), poll.Options.map(() => 0));
-    const avgs = sums.map(s => s / votes.length);
-    return `${pollText(poll, {options: true, desc: true, amounts: true}, avgs)}\n${plural(votes.length, "vote_")}`;
+    const avgs = (await getPollResult(poll)).map(r => r.Average);
+    return `${pollText(poll, {options: true, desc: true, amounts: true}, avgs)}\n${plural(Object.values(poll.Votes).length, "vote_")}`;
 }
 
 
@@ -100,18 +104,39 @@ async function handleMine(input: string, ctx: Ctx): Promise<string> {
     if (!polls.length) {
         return "There are no polls for you right now.";
     }
-    polls.forEach((b, i) => {
+    polls.sort((a, b) => a.TimeSec - b.TimeSec).forEach((b, i) => {
         setTimeout(() => ctx.sendMessage(pollText(b, {options: true})), (i + 1) * 100);
     });
-    return `To cast a vote, reply to each poll message with your choices such as: <code> 0 3 5 2</code>
+    return `To cast a vote, reply to each poll message with your choices such as:<code> 0 3 5 2</code>
 You can revote by doing the same again or replying to your own vote message.
 Polls you can vote in now:`;
 }
 
 
-async function handleLaw(input: string) {
+async function showLawWithResult(law: Law): Promise<string> {
+    if (!law.LatestPollId) {
+        return `Has never been included in a poll.\n${lawText(law)}`;
+    }
+    const {poll} = await getPoll(law.LatestPollId);
+    if (!poll) {
+        return `Historical poll no longer exists.\n${lawText(law)}`;
+    }
+    const avgs = await getPollResult(poll);
+    const percentage = (avgs.find(o => lawIdRegex.test(o.Option))?.Average ?? 0) / poll.Width * 100;
+    return `<b>${percentage >= 50 ? "Accepted" : "Rejected"}</b> at ${percentage}% approval.\n${lawText(law)}`;
+}
+
+
+async function handleLaw(input: string, ctx: Ctx): Promise<string> {
     const lawId = input.match(lawIdRegex)?.[1];
-    return "Erm";
+    if (!lawId) {
+        return "Invalid Law ID.";
+    }
+    const {law} = await getLaw(ctx.chatId, id2n(lawId));
+    if (!law) {
+        return "Law not found.";
+    }
+    return showLawWithResult(law);
 }
 
 
@@ -124,6 +149,7 @@ async function handleNewLaw(input: string, ctx: Ctx): Promise<string> {
         TimeSec: secNow(),
         Name: name,
         Body: body.join("\n"),
+        LatestPollId: null,
     };
     newLaw(ctx.chatId, law);
     return lawText(law);
@@ -132,11 +158,13 @@ async function handleNewLaw(input: string, ctx: Ctx): Promise<string> {
 
 async function handleLaws(input: string, ctx: Ctx): Promise<string> {
     const laws = await getLaws(ctx.chatId);
-    return laws.length ? laws.map(l => lawText(l, ctx.chatId)).join("\n-----\n") : "There are no laws for this chat.";
+    return laws.length
+        ? `${plural(laws.length, "law_")}\n\n${(await Promise.all(laws.map(showLawWithResult))).join("\n\n-----\n\n")}`
+        : "There are no laws for this chat.";
 }
 
 
-const getAllHelp = async () => (await Deno.readTextFile("help.txt")).split("\n\n");
+const getAllHelp = async () => (await Deno.readTextFile("help.txt")).split("\n\n\n");
 
 
 async function handleHelp() {
@@ -151,24 +179,26 @@ async function handleStart() {
 
 async function helpFor(what: string): Promise<string> {
     const help = drop1stLine((await getAllHelp()).find(h => h.startsWith(`/${what}`)) ?? "")
-    return help ? `Usage of /${what}:\n<pre>${help}</pre>` : "No help found.";
+    return help ? help : "No help found.";
 }
 
 
 type Ctx = {chatId: number, userId: number, sendMessage: (text: string) => void};
+
 type Command = {
     test: RegExp,
     handler: (input: string, ctx: Ctx) => Promise<string>,
 };
 
 const actions: Command[] = [
-    {test: /\/start/,     handler: handleStart},
-    {test: /\/newpoll/, handler: handlePoll},
-    {test: /\/result/,    handler: handleResult},
-    {test: /\/mine/,      handler: handleMine},
-    {test: /\/newlaw\s/,  handler: handleNewLaw},
-    {test: /\/law\s/,     handler: handleLaw},
-    {test: /\/help/,      handler: handleHelp},
+    {test: /\/start/,    handler: handleStart},
+    {test: /\/newpoll/,  handler: handlePoll},
+    {test: /\/result/,   handler: handleResult},
+    {test: /\/mine/,     handler: handleMine},
+    {test: /\/newlaw\s/, handler: handleNewLaw},
+    {test: /\/law\s/,    handler: handleLaw},
+    {test: /\/laws/,     handler: handleLaws},
+    {test: /\/help/,     handler: handleHelp},
 ];
 
 async function handleMessage (ctx: Context<State>) {
@@ -176,7 +206,7 @@ async function handleMessage (ctx: Context<State>) {
         return;
     }
     const text = ctx.message.text;
-    const input = text.replace(/.+?\s(.+)/, "$1");
+    const input = text.replace(/.+?\s(.+)/, "$1").trim();
     const chatId = Math.abs(ctx.chat.id);
     const chatName = ctx.chat.id == ctx.me.id ? "Myself" : ctx.chat.title ?? "Unknown";
     const userId = ctx.message.from.id;
@@ -185,7 +215,7 @@ async function handleMessage (ctx: Context<State>) {
     logUser(chatId, chatName, userId);
 
     //Check if user is replying to one of our poll messages (voting)
-    if (ctx.message?.reply_to_message?.from?.id == (await ctx.telegram.getMe()).id) {
+    if (ctx.message.reply_to_message?.from?.id == (await ctx.telegram.getMe()).id) {
         const voteMessage = ctx.message.reply_to_message.text ?? "";
         if (pollIdRegex.test(voteMessage)) {
             const pollId = voteMessage.match(pollIdRegex)?.[1];
