@@ -34,4 +34,7 @@ Creates a new law in this chat.
 
 
 /laws
-Shows all the laws in this chat.
+/laws
+Shows all the voted on and accepted laws in this chat.
+/laws all
+Shows all laws in this chat, regardless of if it was voted on or rejected.

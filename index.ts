@@ -2,9 +2,10 @@ import { config } from "https://deno.land/x/dotenv/mod.ts";
 import { Bot, Context } from "https://deno.land/x/telegram@v0.1.1/mod.ts";
 import { State } from "https://deno.land/x/telegram@v0.1.1/context.ts";
 import { castVote, newPoll, logUser, Poll, getLaws, Law, newLaw, VoteStatus, getUserPolls, n2id, secNow, getPoll, instanceOfPoll, pollIsOpen, id2n, getLaw, getPollResult } from "./db.ts";
+import { LawResult, LawResultStatus, lawResult } from "./LawResult.ts";
 
 const pollIdRegex = /^\[([0-9a-zA-Z]+)\]/;
-const lawIdRegex = /^\(?([0-9a-zA-Z]+)/;
+export const lawIdRegex = /^\(?([0-9a-zA-Z]+)/;
 
 const repeat = (x: any, n: number): any[] => n < 1 ? [] : [...new Array(Math.floor(n))].map(_ => x);
 const repeatStr = (x: any, n: number): string => repeat(x, n).join("");
@@ -24,7 +25,7 @@ function pollText (poll: Poll, show: ShowPollOptions, amounts: number[] = []) {
             `\n<code>${show.amounts ? `${showChoiceAmount(opt.amount, poll.Width)} ${opt.amount.toFixed(2)}` : ""} </code> ${opt.i+1}. ${opt.text}`).join("") : "");
 }
 
-const lawText = (law: Law) => `<code>(${n2id(law.TimeSec)})</code> <b>${law.Name}</b>: ${law.Body}`;
+const lawText = (law: Law) => `<code>(${n2id(law.TimeSec)})</code> <b>${law.Name}</b>\n${law.Body}`;
 
 const unicodeHorizontalBar = (width: number, fraction: number) => {
     fraction = Math.min(1, Math.max(fraction, 0));
@@ -108,23 +109,13 @@ async function handleMine(input: string, ctx: Ctx): Promise<string> {
         setTimeout(() => ctx.sendMessage(pollText(b, {options: true})), (i + 1) * 100);
     });
     return `To cast a vote, reply to each poll message with your choices such as:<code> 0 3 5 2</code>
-You can revote by doing the same again or replying to your own vote message.
+You can re-vote by doing the same again or replying to your own vote message.
 Polls you can vote in now:`;
 }
 
 
-async function showLawWithResult(law: Law): Promise<string> {
-    if (!law.LatestPollId) {
-        return `Has never been included in a poll.\n${lawText(law)}`;
-    }
-    const {poll} = await getPoll(law.LatestPollId);
-    if (!poll) {
-        return `Historical poll no longer exists.\n${lawText(law)}`;
-    }
-    const avgs = await getPollResult(poll);
-    const percentage = (avgs.find(o => lawIdRegex.test(o.Option))?.Average ?? 0) / poll.Width * 100;
-    return `<b>${percentage >= 50 ? "Accepted" : "Rejected"}</b> at ${percentage}% approval.\n${lawText(law)}`;
-}
+const showLawResult = ({status, law, pc}: LawResult): string =>
+    `<b>${status}</b>${[LawResultStatus.Accepted, LawResultStatus.Rejected].includes(status) ? ` at ${pc.toFixed(2)}% approval.` : ""}\n${lawText(law)}`;
 
 
 async function handleLaw(input: string, ctx: Ctx): Promise<string> {
@@ -136,7 +127,7 @@ async function handleLaw(input: string, ctx: Ctx): Promise<string> {
     if (!law) {
         return "Law not found.";
     }
-    return showLawWithResult(law);
+    return showLawResult(await lawResult(law));
 }
 
 
@@ -158,8 +149,10 @@ async function handleNewLaw(input: string, ctx: Ctx): Promise<string> {
 
 async function handleLaws(input: string, ctx: Ctx): Promise<string> {
     const laws = await getLaws(ctx.chatId);
+    const showAll = input.toLowerCase() == "all";
+    const results = (await Promise.all(laws.map(lawResult))).filter(r => showAll || r.status == LawResultStatus.Accepted);
     return laws.length
-        ? `${plural(laws.length, "law_")}\n\n${(await Promise.all(laws.map(showLawWithResult))).join("\n\n-----\n\n")}`
+        ? `${plural(results.length, "law_")}\n\n${(await Promise.all(results.map(showLawResult))).join("\n\n-----\n\n")}`
         : "There are no laws for this chat.";
 }
 

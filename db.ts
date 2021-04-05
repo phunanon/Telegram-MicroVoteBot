@@ -102,7 +102,6 @@ export async function newPoll(poll: Poll, lawIds: number[]) {
             law.LatestPollId = poll.TimeSec;
         }
     });
-    console.log(chat);
     await write(chat);
 }
 
@@ -167,7 +166,7 @@ export async function newLaw(chatId: number, law: Law): Promise<void> {
         return;
     }
     chat.Laws = [...chat.Laws ?? [], law];
-    write(chat);
+    await write(chat);
 }
 
 
