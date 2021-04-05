@@ -17,6 +17,8 @@ export interface Poll {
     Desc: string,
     Options: string[],
     Width: number,
+    ChatPop: number,
+    Quorum: QuorumType,
     Votes: {[voterId: number]: Vote},
 }
 
@@ -29,6 +31,13 @@ export interface Law {
     LatestPollId: number | null,
 }
 
+export interface Chat {
+    Name: string,
+    LastSeenSec: {[userId: number]: number},
+    Laws: Law[],
+    Quorum: QuorumType,
+}
+
 export enum VoteStatus {
     Success = "Vote cast successfully",
     Unauthorised = "You must message on the chat this poll was created, after its creation",
@@ -37,11 +46,8 @@ export enum VoteStatus {
     InvalidNumOptions = "Invalid number of options",
 }
 
-export interface Chat {
-    Name: string,
-    LastSeenSec: {[userId: number]: number},
-    Laws: Law[],
-}
+export const QuorumTypes = ["0", "4", "ceil(sqrt(n))", "floor(sqrt(n))"] as const;
+export type QuorumType = typeof QuorumTypes[number];
 
 export const secNow = () => Math.floor((Date.now() - Date.UTC(2021, 3, 1)) / 1000);
 export const n2id = base62.encode;
@@ -83,10 +89,14 @@ export function getLawFromChat (chat: Chat, lawId: number): Law | null {
 }
 
 
-export async function getPollResult (poll: Poll): Promise<{Option: string, Average: number}[]> {
+export async function getPollResult (poll: Poll):
+  Promise<{reachedQuorum: boolean, result: {option: string, average: number}[]}> {
     const votes = Object.values(poll.Votes);
     const sums = votes.reduce((sums, v) => sums.map((s, i) => s + v.Choices[i]), poll.Options.map(() => 0));
-    return sums.map((s, i) => ({Option: poll.Options[i], Average: s / votes.length}));
+    return {
+        reachedQuorum: eval(`const n = ${poll.ChatPop}, sqrt = Math.sqrt, floor = Math.floor, ceil = Math.ceil; ${poll.Quorum}`) <= votes.length,
+        result: sums.map((s, i) => ({option: poll.Options[i], average: s / votes.length})),
+    };
 }
 
 
@@ -106,7 +116,7 @@ export async function newPoll(poll: Poll, lawIds: number[]) {
 }
 
 
-export async function castVote(pollId: number, userId: number, choices: number[]):
+export async function castVote(pollId: number, userId: number, choices: number[], chatPop: number):
   Promise<VoteStatus | Poll> {
     const {poll, write} = await getPoll(pollId);
     if (!poll) {
@@ -126,6 +136,8 @@ export async function castVote(pollId: number, userId: number, choices: number[]
         Choices: choices,
     };
     poll.Votes[userId] = vote;
+    poll.ChatPop = chatPop;
+    poll.Quorum = (await getChat(poll.ChatId)).chat?.Quorum ?? "0";
     await write(poll);
     return poll;
 }
@@ -148,7 +160,7 @@ export async function getUserPolls(userId: number): Promise<Poll[]> {
 export async function logUser(chatId: number, chatName: string, userId: number) {
     let {chat, write} = await getChat(chatId);
     if (!chat) {
-        chat = <Chat>{Name: "", LastSeenSec: {}, Laws: []};
+        chat = <Chat>{Name: "", LastSeenSec: {}, Laws: [], Quorum: "0"};
         await write(chat);
     }
     chat.Name = chatName;
@@ -184,4 +196,13 @@ export async function userCanVote(poll: Poll, userId: number): Promise<boolean> 
     }
     const lastSeen = users[userId];
     return lastSeen < poll.TimeSec + (poll.Minutes * 60);
+}
+
+
+export async function setChatQuorum(chatId: number, quorum: QuorumType) {
+    const {chat, write} = await getChat(chatId);
+    if (chat) {
+        chat.Quorum = quorum;
+        await write(chat);
+    }
 }

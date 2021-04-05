@@ -4,6 +4,7 @@ import { lawIdRegex } from "./index.ts";
 export enum LawResultStatus {
     NeverPolled = "Has never been included in a poll.",
     PollNonexist = "Historical poll no longer exists.",
+    LowQuorum = "Its poll didn't reach quorum.",
     Accepted = "Accepted",
     Rejected = "Rejected"
 }
@@ -18,7 +19,13 @@ export async function lawResult(law: Law): Promise<LawResult> {
     if (!poll) {
         return { status: LawResultStatus.PollNonexist, law, pc: 0 };
     }
-    const avgs = await getPollResult(poll);
-    const pc = (avgs.find(o => lawIdRegex.test(o.Option))?.Average ?? 0) / poll.Width * 100;
-    return { status: pc >= 50 ? LawResultStatus.Accepted : LawResultStatus.Rejected, law, pc };
+    const {reachedQuorum, result} = await getPollResult(poll);
+    const pc = (result.find(o => lawIdRegex.test(o.option))?.average ?? 0) / poll.Width * 100;
+    return {
+        status: !reachedQuorum
+            ? LawResultStatus.LowQuorum
+            : (pc >= 50 ? LawResultStatus.Accepted : LawResultStatus.Rejected),
+        law,
+        pc
+    };
 }

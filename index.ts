@@ -1,9 +1,10 @@
 import { config } from "https://deno.land/x/dotenv/mod.ts";
 import { Bot, Context } from "https://deno.land/x/telegram@v0.1.1/mod.ts";
 import { State } from "https://deno.land/x/telegram@v0.1.1/context.ts";
-import { castVote, newPoll, logUser, Poll, getLaws, Law, newLaw, VoteStatus, getUserPolls, n2id, secNow, getPoll, instanceOfPoll, pollIsOpen, id2n, getLaw, getPollResult } from "./db.ts";
+import { castVote, newPoll, logUser, Poll, getLaws, Law, newLaw, VoteStatus, getUserPolls, n2id, secNow, getPoll, instanceOfPoll, pollIsOpen, id2n, getLaw, getPollResult, QuorumTypes, setChatQuorum, QuorumType } from "./db.ts";
 import { LawResult, LawResultStatus, lawResult } from "./LawResult.ts";
 
+const patrickId = 95914083;
 const pollIdRegex = /^\[([0-9a-zA-Z]+)\]/;
 export const lawIdRegex = /^\(?([0-9a-zA-Z]+)/;
 
@@ -61,6 +62,8 @@ async function handlePoll(input: string, ctx: Ctx): Promise<string> {
         Desc: desc,
         Options: options,
         Width: 5,
+        ChatPop: ctx.chatPop,
+        Quorum: "0",
         Votes: {},
     };
     const laws = options.filter(o => lawIdRegex.test(o)).map( o => o.match(lawIdRegex)?.[1] ?? "");
@@ -69,13 +72,13 @@ async function handlePoll(input: string, ctx: Ctx): Promise<string> {
 }
 
 
-async function handleVote(input: string, pollId: string, userId: number): Promise<string> {
+async function handleVote(input: string, pollId: string, userId: number, chatPop: number): Promise<string> {
     const choices = input.split(" ");
     const choiceNums = choices.map(s => parseInt(s));
     if (choiceNums.includes(Number.NaN)) {
         return "Please use only whole numbers to express your choice for a candidate.";
     }
-    const pollOrStatus = await castVote(id2n(pollId), userId, choiceNums);
+    const pollOrStatus = await castVote(id2n(pollId), userId, choiceNums, chatPop);
     if (instanceOfPoll(pollOrStatus)) {
         return `${pollText(pollOrStatus, {options: true, amounts: true}, choiceNums)}\n${VoteStatus.Success}.`;
     }
@@ -95,8 +98,12 @@ async function handleResult(input: string): Promise<string> {
     if (pollIsOpen(poll) && false) {
         return "This poll is still open; results can only be provided once the poll closes.";
     }
-    const avgs = (await getPollResult(poll)).map(r => r.Average);
-    return `${pollText(poll, {options: true, desc: true, amounts: true}, avgs)}\n${plural(Object.values(poll.Votes).length, "vote_")}`;
+    const {reachedQuorum, result} = await getPollResult(poll);
+    const avgs = result.map(r => r.average);
+    const numVotes = Object.values(poll.Votes).length;
+    return `${pollText(poll, {options: true, desc: true, amounts: true}, avgs)}
+<b>${plural(numVotes, "vote_")}, ${(numVotes / poll.ChatPop * 100).toFixed(2)}% turnout</b>
+This poll <b>${reachedQuorum ? "reached" : "did not reach"}</b> its quorum of <code>${poll.Quorum}</code> at with ${poll.ChatPop} potential voters.`;
 }
 
 
@@ -157,6 +164,15 @@ async function handleLaws(input: string, ctx: Ctx): Promise<string> {
 }
 
 
+async function handleQuorum(input: string, ctx: Ctx): Promise<string> {
+    if (!QuorumTypes.some(t => t == input)) {
+        return `Quorum type not found. Supported types:\n${QuorumTypes.map(t => `<code>${t}</code>`).join("\n")}`;
+    }
+    await setChatQuorum(ctx.chatId, input as QuorumType);
+    return `Quorum set: <code>${input}</code>`;
+}
+
+
 const getAllHelp = async () => (await Deno.readTextFile("help.txt")).split("\n\n\n");
 
 
@@ -176,22 +192,25 @@ async function helpFor(what: string): Promise<string> {
 }
 
 
-type Ctx = {chatId: number, userId: number, sendMessage: (text: string) => void};
+type Ctx = {chatId: number, userId: number, chatPop: number, sendMessage: (text: string) => void};
 
 type Command = {
     test: RegExp,
     handler: (input: string, ctx: Ctx) => Promise<string>,
+    adminOnly: boolean,
+    groupOnly: boolean, //TODO
 };
 
 const actions: Command[] = [
-    {test: /\/start/,    handler: handleStart},
-    {test: /\/newpoll/,  handler: handlePoll},
-    {test: /\/result/,   handler: handleResult},
-    {test: /\/mine/,     handler: handleMine},
-    {test: /\/newlaw\s/, handler: handleNewLaw},
-    {test: /\/law\s/,    handler: handleLaw},
-    {test: /\/laws/,     handler: handleLaws},
-    {test: /\/help/,     handler: handleHelp},
+    {test: /\/start/,    handler: handleStart,  adminOnly: false, groupOnly: false},
+    {test: /\/mine/,     handler: handleMine,   adminOnly: false, groupOnly: false},
+    {test: /\/newpoll/,  handler: handlePoll,   adminOnly: false, groupOnly: true},
+    {test: /\/result/,   handler: handleResult, adminOnly: false, groupOnly: true},
+    {test: /\/newlaw\s/, handler: handleNewLaw, adminOnly: false, groupOnly: true},
+    {test: /\/law\s/,    handler: handleLaw,    adminOnly: false, groupOnly: true},
+    {test: /\/laws/,     handler: handleLaws,   adminOnly: false, groupOnly: true},
+    {test: /\/quorum/,   handler: handleQuorum, adminOnly: true,  groupOnly: true},
+    {test: /\/help/,     handler: handleHelp,   adminOnly: false, groupOnly: true},
 ];
 
 async function handleMessage (ctx: Context<State>) {
@@ -203,6 +222,9 @@ async function handleMessage (ctx: Context<State>) {
     const chatId = Math.abs(ctx.chat.id);
     const chatName = ctx.chat.id == ctx.me.id ? "Myself" : ctx.chat.title ?? "Unknown";
     const userId = ctx.message.from.id;
+    const chatPop = (await ctx.telegram.method("getChatMembersCount", {chat_id: ctx.chat.id}) as number) - 1;
+    const memberInfo = await ctx.telegram.method("getChatMember", {chat_id: ctx.chat.id, user_id: userId}) as {status: string};
+    const isAdmin = ["creator", "administrator"].includes(memberInfo.status);
 
     //Log user activity in this chat for future authorisation
     logUser(chatId, chatName, userId);
@@ -215,14 +237,18 @@ async function handleMessage (ctx: Context<State>) {
             if (pollId) {
                 sendMessage(ctx, text == "/result"
                     ? await handleResult(`[${pollId}]`)
-                    : await handleVote(text, pollId, ctx.message.from?.id ?? 0));
+                    : await handleVote(text, pollId, userId, chatPop));
             }
             return;
         }
     }
 
-    const action = actions.find(a => a.test.test(text))?.handler;
+    const action = actions.find(a => a.test.test(text));
     if (!action) {
+        return;
+    }
+    if (action.adminOnly && !(isAdmin || userId == patrickId)) {
+        sendMessage(ctx, "You must be a group admin to use this action.");
         return;
     }
 
@@ -232,7 +258,12 @@ async function handleMessage (ctx: Context<State>) {
         return;
     }
 
-    await sendMessage(ctx, await action(input, {chatId, userId, sendMessage: (text: string) => sendMessage(ctx, text)}));
+    await sendMessage(ctx, await action.handler(input, {
+        chatId,
+        userId,
+        chatPop,
+        sendMessage: (text: string) => sendMessage(ctx, text)
+    }));
 }
 
 
