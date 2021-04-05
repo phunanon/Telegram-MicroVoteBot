@@ -1,0 +1,29 @@
+/newballot
+  Creates a new ballot.
+/newballot [Period e.g. 5m 1h 1d 2M 1y]
+[optional LawID e.g. (123)] [Name]
+[Description] or [blank line]
+[Option one]
+...
+[Option N]
+
+/result
+  Shows result for a ballot. 
+/result [BallotID e.g. [1234ABC]]
+
+/vote
+nothing
+
+/mine
+nothing
+
+/law
+nothing
+
+/newlaw
+  Creates a new law in this chat.
+/newlaw [Name]
+[Legislation body]
+
+/laws
+  Shows all the laws in this chat.
