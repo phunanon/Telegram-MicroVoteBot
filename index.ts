@@ -3,6 +3,9 @@ import { Bot, Context } from "https://deno.land/x/telegram@v0.1.1/mod.ts";
 import { State } from "https://deno.land/x/telegram@v0.1.1/context.ts";
 import { castVote, newPoll, logUser, Poll, getLaws, Law, newLaw, VoteStatus, getUserPolls, n2id, secNow, getPoll, instanceOfPoll, pollIsOpen, id2n, getLaw, getPollResult, QuorumTypes, setChatQuorum, QuorumType } from "./db.ts";
 import { LawResult, LawResultStatus, lawResult } from "./LawResult.ts";
+import { makeConstitution } from "./MakeConstitution.ts";
+import { SendDocumentParameters } from "https://deno.land/x/telegram@v0.1.1/types.ts";
+import { exec } from 'https://deno.land/x/2exec/mod.ts';
 
 const patrickId = 95914083;
 const pollIdRegex = /^\[([0-9a-zA-Z]+)\]/;
@@ -115,7 +118,7 @@ async function handleMine(input: string, ctx: Ctx): Promise<string> {
     polls.sort((a, b) => a.TimeSec - b.TimeSec).forEach((b, i) => {
         setTimeout(() => ctx.sendMessage(pollText(b, {options: true})), (i + 1) * 100);
     });
-    return `To cast a vote, reply to each poll message with your choices such as:<code> 0 3 5 2</code>
+    return `To cast a vote, reply to each poll message with your choices, as scores from 1 to 5, such as:<code> 1 3 5 2</code>
 You can re-vote by doing the same again or replying to your own vote message.
 Polls you can vote in now:`;
 }
@@ -155,12 +158,24 @@ async function handleNewLaw(input: string, ctx: Ctx): Promise<string> {
 
 
 async function handleLaws(input: string, ctx: Ctx): Promise<string> {
-    const laws = await getLaws(ctx.chatId);
     const showAll = input.toLowerCase() == "all";
-    const results = (await Promise.all(laws.map(lawResult))).filter(r => showAll || r.status == LawResultStatus.Accepted);
-    return laws.length
-        ? `${plural(results.length, "law_")}\n\n${(await Promise.all(results.map(showLawResult))).join("\n\n-----\n\n")}`
-        : "There are no laws for this chat.";
+    const allResults = await Promise.all((await getLaws(ctx.chatId)).map(lawResult));
+    const results = allResults.filter(r => showAll || r.status == LawResultStatus.Accepted);
+    
+    if (!allResults.length) {
+        return "There are no laws for this chat.";
+    }
+    if (!results.length) {
+        return "There are no activated laws for this chat. Perhaps try <code>/laws all</code>";
+    }
+    
+    const pdfBytes = await makeConstitution(results, ctx.chatName);
+    await Deno.writeFile(`constitution.pdf`, pdfBytes);
+    const execResult = await exec(`sh uploadConstitution.sh ${ctx.chatId}`);
+    const docUrl = JSON.parse(execResult)["file"]["link"];
+    ctx.sendFile(docUrl, `Laws of ${ctx.chatName}`);
+
+    return "";
 }
 
 
@@ -192,7 +207,14 @@ async function helpFor(what: string): Promise<string> {
 }
 
 
-type Ctx = {chatId: number, userId: number, chatPop: number, sendMessage: (text: string) => void};
+type Ctx = {
+    chatId: number,
+    userId: number,
+    chatPop: number,
+    chatName: string,
+    sendMessage: (text: string) => void
+    sendFile: (url: string, caption: string) => Promise<void>
+};
 
 type Command = {
     test: RegExp,
@@ -217,6 +239,7 @@ async function handleMessage (ctx: Context<State>) {
     if (ctx.chat == undefined || ctx.message == undefined || ctx.message.from == undefined || ctx.message.text == undefined) {
         return;
     }
+
     const text = ctx.message.text;
     const input = text.replace(/.+?\s(.+)/, "$1").trim();
     const chatId = Math.abs(ctx.chat.id);
@@ -258,12 +281,23 @@ async function handleMessage (ctx: Context<State>) {
         return;
     }
 
-    await sendMessage(ctx, await action.handler(input, {
+    const message = await action.handler(input, {
         chatId,
         userId,
         chatPop,
-        sendMessage: (text: string) => sendMessage(ctx, text)
-    }));
+        chatName,
+        sendMessage: (text: string) => sendMessage(ctx, text),
+        sendFile: async (url: string, caption: string) => {
+            await ctx.telegram.method("sendDocument", <SendDocumentParameters>{
+                chat_id: ctx.chat?.id,
+                document: url,
+                caption: caption,
+            });
+        }
+    });
+    if (message) {
+        await sendMessage(ctx, message);
+    }
 }
 
 
