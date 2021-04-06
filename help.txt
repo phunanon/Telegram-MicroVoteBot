@@ -15,10 +15,6 @@ Shows result for a poll. Either use "/result" in reply to a poll message or:
 /result [Poll ID e.g. <code>[1234ABC]</code>]
 
 
-/vote
-TODO
-
-
 /mine
 TODO
 

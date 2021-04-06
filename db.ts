@@ -38,15 +38,17 @@ export interface Chat {
     Quorum: QuorumType,
 }
 
+
 export enum VoteStatus {
     Success = "Vote cast successfully",
     Unauthorised = "You must message on the chat this poll was created, after its creation",
     Expired = "This poll expired",
     Nonexist = "Poll does not exist",
     InvalidNumOptions = "Invalid number of options",
+    InvalidScore = "Scores must be between 1 and 5"
 }
 
-export const QuorumTypes = ["0", "4", "ceil(sqrt(n))", "floor(sqrt(n))"] as const;
+export const QuorumTypes = ["0", "4", "ceil(sqrt(n * 2))", "floor(sqrt(n))"] as const;
 export type QuorumType = typeof QuorumTypes[number];
 
 export const secNow = () => Math.floor((Date.now() - Date.UTC(2021, 3, 1)) / 1000);
@@ -89,8 +91,8 @@ export function getLawFromChat (chat: Chat, lawId: number): Law | null {
 }
 
 
-export async function getPollResult (poll: Poll):
-  Promise<{reachedQuorum: boolean, result: {option: string, average: number}[]}> {
+export function getPollResult (poll: Poll):
+  {reachedQuorum: boolean, result: {option: string, average: number}[]} {
     const votes = Object.values(poll.Votes);
     const sums = votes.reduce((sums, v) => sums.map((s, i) => s + v.Choices[i]), poll.Options.map(() => 0));
     return {
@@ -131,6 +133,9 @@ export async function castVote(pollId: number, userId: number, choices: number[]
     if (choices.length != poll.Options.length) {
         return VoteStatus.InvalidNumOptions;
     }
+    if (choices.some(c => c < 1 || c > 5)) {
+        return VoteStatus.InvalidScore;
+    }
     const vote: Vote = {
         TimeSec: secNow(),
         Choices: choices,
@@ -143,7 +148,7 @@ export async function castVote(pollId: number, userId: number, choices: number[]
 }
 
 
-export async function getPolls(chatId: number = 0): Promise<Poll[]> {
+export async function getPolls(chatId = 0): Promise<Poll[]> {
     const files = [...Deno.readDirSync("./db")].filter(d => d.isFile && d.name.startsWith("poll"));
     const polls = await Promise.all(files.map(async f => await readJson(`db/${f.name}`) as Poll));
     return chatId ? polls.filter(b => b.ChatId == chatId): polls;

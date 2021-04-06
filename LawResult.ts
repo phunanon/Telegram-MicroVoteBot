@@ -2,7 +2,7 @@ import { Law, getPoll, getPollResult } from "./db.ts";
 import { lawIdRegex } from "./index.ts";
 
 export enum LawResultStatus {
-    NeverPolled = "Has never been included in a poll.",
+    NeverPolled = "Has never been voted on.",
     PollNonexist = "Historical poll no longer exists.",
     LowQuorum = "Its poll didn't reach quorum.",
     Accepted = "Accepted",
