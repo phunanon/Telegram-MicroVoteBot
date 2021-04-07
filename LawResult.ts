@@ -1,4 +1,4 @@
-import { Law, getPoll, getPollResult } from "./db.ts";
+import { getPoll, getPollResult, Law } from "./db.ts";
 import { lawIdRegex } from "./index.ts";
 
 export enum LawResultStatus {
@@ -6,10 +6,10 @@ export enum LawResultStatus {
     PollNonexist = "Historical poll no longer exists.",
     LowQuorum = "Its poll didn't reach quorum.",
     Accepted = "Accepted",
-    Rejected = "Rejected"
+    Rejected = "Rejected",
 }
 
-export type LawResult = { status: LawResultStatus; law: Law; pc: number; };
+export type LawResult = { status: LawResultStatus; law: Law; pc: number };
 
 export async function lawResult(law: Law): Promise<LawResult> {
     if (!law.LatestPollId) {
@@ -19,13 +19,15 @@ export async function lawResult(law: Law): Promise<LawResult> {
     if (!poll) {
         return { status: LawResultStatus.PollNonexist, law, pc: 0 };
     }
-    const {reachedQuorum, result} = await getPollResult(poll);
-    const pc = (result.find(o => lawIdRegex.test(o.option))?.average ?? 0) / poll.Width * 100;
+    const { reachedQuorum, result } = await getPollResult(poll);
+    const pc = ((result.find(o => lawIdRegex.test(o.option))?.average ?? 0) / poll.Width) * 100;
     return {
         status: !reachedQuorum
             ? LawResultStatus.LowQuorum
-            : (pc >= 50 ? LawResultStatus.Accepted : LawResultStatus.Rejected),
+            : pc >= 50
+            ? LawResultStatus.Accepted
+            : LawResultStatus.Rejected,
         law,
-        pc
+        pc,
     };
 }
