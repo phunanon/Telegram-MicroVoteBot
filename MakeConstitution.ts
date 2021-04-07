@@ -10,7 +10,7 @@ export async function makeConstitution (laws: LawResult[], chatName: string): Pr
 
   let page = pdfDoc.addPage();
   pdfDoc.registerFontkit(fontkit);
-  const font = await pdfDoc.embedFont(await Deno.readFile("GenBasR.ttf"), {features: { liga: false }});
+  const font = await pdfDoc.embedFont(await Deno.readFile("GentiumPlus-R.ttf"), {features: { liga: false }});
   
   let nextY = 0;
   const y = () => page.getHeight() - (margin * 1.5 + nextY);
