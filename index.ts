@@ -170,10 +170,12 @@ async function handleLaws(input: string, ctx: Ctx): Promise<string> {
     }
     
     const pdfBytes = await makeConstitution(results, ctx.chatName);
-    await Deno.writeFile(`constitution.pdf`, pdfBytes);
-    const execResult = await exec(`sh uploadConstitution.sh ${ctx.chatId}`);
-    const docUrl = JSON.parse(execResult)["file"]["link"];
-    ctx.sendFile(docUrl, `Laws of ${ctx.chatName}`);
+    const fileName = `${ctx.chatName} Constitution.pdf`;
+    await Deno.writeFile(fileName, pdfBytes);
+    await Deno.writeTextFile("uploadConstitution.sh", `curl -F document=@"${fileName}" https://api.telegram.org/bot${token}/sendDocument?chat_id=${ctx.chatId}`);
+    await exec(`sh uploadConstitution.sh`);
+    await Deno.remove(fileName);
+    await Deno.remove("uploadConstitution.sh");
 
     return "";
 }
@@ -213,7 +215,6 @@ type Ctx = {
     chatPop: number,
     chatName: string,
     sendMessage: (text: string) => void
-    sendFile: (url: string, caption: string) => Promise<void>
 };
 
 type Command = {
@@ -287,13 +288,6 @@ async function handleMessage (ctx: Context<State>) {
         chatPop,
         chatName,
         sendMessage: (text: string) => sendMessage(ctx, text),
-        sendFile: async (url: string, caption: string) => {
-            await ctx.telegram.method("sendDocument", <SendDocumentParameters>{
-                chat_id: ctx.chat?.id,
-                document: url,
-                caption: caption,
-            });
-        }
     });
     if (message) {
         await sendMessage(ctx, message);
