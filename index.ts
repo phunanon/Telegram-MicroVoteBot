@@ -161,7 +161,7 @@ async function handleLaws(input: string, ctx: Ctx): Promise<string> {
     const showAll = input.toLowerCase() == "all";
     const allResults = await Promise.all((await getLaws(ctx.chatId)).map(lawResult));
     const results = allResults.filter(r => showAll || r.status == LawResultStatus.Accepted);
-    
+
     if (!allResults.length) {
         return "There are no laws for this chat.";
     }
@@ -236,19 +236,21 @@ const actions: Command[] = [
     {test: /\/help/,     handler: handleHelp,   adminOnly: false, groupOnly: true},
 ];
 
-async function handleMessage (ctx: Context<State>) {
+async function handleMessage(ctx: Context<State>): Promise<void> {
     if (ctx.chat == undefined || ctx.message == undefined || ctx.message.from == undefined || ctx.message.text == undefined) {
         return;
     }
 
     const text = ctx.message.text;
     const input = text.replace(/.+?\s(.+)/, "$1").trim();
-    const chatId = Math.abs(ctx.chat.id);
+    const chatId = ctx.chat.id;
     const chatName = ctx.chat.id == ctx.me.id ? "Myself" : ctx.chat.title ?? "Unknown";
     const userId = ctx.message.from.id;
     const chatPop = (await ctx.telegram.method("getChatMembersCount", {chat_id: ctx.chat.id}) as number) - 1;
     const memberInfo = await ctx.telegram.method("getChatMember", {chat_id: ctx.chat.id, user_id: userId}) as {status: string};
     const isAdmin = ["creator", "administrator"].includes(memberInfo.status);
+
+    await log([chatId, userId, text]);
 
     //Log user activity in this chat for future authorisation
     logUser(chatId, chatName, userId);
@@ -292,6 +294,11 @@ async function handleMessage (ctx: Context<State>) {
     if (message) {
         await sendMessage(ctx, message);
     }
+}
+
+
+async function log(entry: unknown) {
+    await Deno.writeTextFile("log.txt", `${JSON.stringify(entry)}\n`, {append: true});
 }
 
 

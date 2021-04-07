@@ -58,7 +58,7 @@ export const id2n = base62.decode;
 
 async function getChat (chatId: number):
   Promise<{chat: Chat | null, write: ((chat: Chat) => Promise<void>)}> {
-    const fileName = `db/chat-${chatId}.json`;
+    const fileName = `db/chat${chatId}.json`;
     return {
         chat: await exists(fileName) ? await readJson(fileName) as Chat : null,
         write: async (chat: Chat) => await writeJson(fileName, chat),
@@ -68,7 +68,7 @@ async function getChat (chatId: number):
 
 export async function getPoll (pollId: number):
   Promise<{poll: Poll | null, write: ((poll: Poll) => Promise<void>)}> {
-    const fileName = `db/poll-${pollId}.json`;
+    const fileName = `db/poll${pollId}.json`;
     return {
         poll: await exists(fileName) ? await readJson(fileName) as Poll : null,
         write: async (poll: Poll) => await writeJson(fileName, poll),
@@ -191,7 +191,7 @@ export const pollIsOpen = (poll: Poll): boolean => secNow() < poll.TimeSec + (po
 
 
 export async function userCanVote(poll: Poll, userId: number): Promise<boolean> {
-    const fileName = `db/chat-${poll.ChatId}.json`;
+    const fileName = `db/chat${poll.ChatId}.json`;
     if (!(await exists(fileName))) {
         return false;
     }
