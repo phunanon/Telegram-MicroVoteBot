@@ -311,7 +311,7 @@ async function handleMessage(ctx: Context<State>): Promise<void> {
     const text = ctx.message.text;
     const input = text.replace(/^\/\w+/, "").trim();
     const chatId = ctx.chat.id;
-    const chatName = ctx.chat.id == ctx.me.id ? "Myself" : ctx.chat.title ?? "Unknown";
+    const chatName = ctx.chat.id > 0 ? "Myself" : ctx.chat.title ?? "Unknown";
     const userId = ctx.message.from.id;
     const chatPop =
         ((await ctx.telegram.method("getChatMembersCount", { chat_id: ctx.chat.id })) as number) -
@@ -346,6 +346,13 @@ async function handleMessage(ctx: Context<State>): Promise<void> {
 
     const action = actions.find(a => a.test.test(text));
     if (!action) {
+        return;
+    }
+    if (action.groupOnly && chatId > 0 && !patrickId) {
+        sendMessage(
+            ctx,
+            "This action can only be used in a group chat with the bot as an admin member.",
+        );
         return;
     }
 
