@@ -212,7 +212,7 @@ async function handleLaws(input: string, ctx: Ctx): Promise<string> {
     const showAll = input.toLowerCase() == "all";
     const allResults = await Promise.all((await getLaws(ctx.chatId)).map(lawResult));
     const results = allResults.filter(r => showAll || r.status == LawResultStatus.Accepted);
-    
+
     if (!allResults.length) {
         return "There are no laws for this chat.";
     }
@@ -280,22 +280,28 @@ type Ctx = {
     sendMessage: (text: string) => void;
 };
 
+enum CommandArea {
+    Group,
+    Bot,
+    Both,
+}
+
 type Command = {
     test: RegExp;
     handler: (input: string, ctx: Ctx) => Promise<string>;
-    groupOnly: boolean; //TODO
+    usedIn: CommandArea;
 };
 
 const actions: Command[] = [
-    { test: /^\/start/, handler: handleStart, groupOnly: false },
-    { test: /^\/mine/, handler: handleMine, groupOnly: false },
-    { test: /^\/newpoll/, handler: handlePoll, groupOnly: true },
-    { test: /^\/result/, handler: handleResult, groupOnly: true },
-    { test: /^\/newlaw\s/, handler: handleNewLaw, groupOnly: true },
-    { test: /^\/law\s/, handler: handleLaw, groupOnly: true },
-    { test: /^\/laws/, handler: handleLaws, groupOnly: true },
-    { test: /^\/quorum/, handler: handleQuorum, groupOnly: true },
-    { test: /^\/help/, handler: handleHelp, groupOnly: true },
+    { test: /^\/start/, handler: handleStart, usedIn: CommandArea.Bot },
+    { test: /^\/mine/, handler: handleMine, usedIn: CommandArea.Bot },
+    { test: /^\/newpoll/, handler: handlePoll, usedIn: CommandArea.Group },
+    { test: /^\/result/, handler: handleResult, usedIn: CommandArea.Both },
+    { test: /^\/newlaw\s/, handler: handleNewLaw, usedIn: CommandArea.Group },
+    { test: /^\/law\s/, handler: handleLaw, usedIn: CommandArea.Group },
+    { test: /^\/laws/, handler: handleLaws, usedIn: CommandArea.Group },
+    { test: /^\/quorum/, handler: handleQuorum, usedIn: CommandArea.Group },
+    { test: /^\/help/, handler: handleHelp, usedIn: CommandArea.Both },
 ];
 
 async function handleMessage(ctx: Context<State>): Promise<void> {
@@ -348,12 +354,21 @@ async function handleMessage(ctx: Context<State>): Promise<void> {
     if (!action) {
         return;
     }
-    if (action.groupOnly && chatId > 0 && !patrickId) {
-        sendMessage(
-            ctx,
-            "This action can only be used in a group chat with the bot as an admin member.",
-        );
-        return;
+    if (userId != patrickId) {
+        if (chatId > 0 && action.usedIn == CommandArea.Group) {
+            sendMessage(
+                ctx,
+                "This action can only be used in a group chat with the bot as an admin member.",
+            );
+            return;
+        }
+        if (chatId < 0 && action.usedIn == CommandArea.Bot) {
+            sendMessage(
+                ctx,
+                `This action can only be used <a href="https://t.me/MicroVoteBot">with the bot directly</a>.`,
+            );
+            return;
+        }
     }
 
     const [what, help] = text.split(" ");
