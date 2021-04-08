@@ -212,7 +212,7 @@ async function handleLaws(input: string, ctx: Ctx): Promise<string> {
     const showAll = input.toLowerCase() == "all";
     const allResults = await Promise.all((await getLaws(ctx.chatId)).map(lawResult));
     const results = allResults.filter(r => showAll || r.status == LawResultStatus.Accepted);
-
+    
     if (!allResults.length) {
         return "There are no laws for this chat.";
     }
@@ -287,15 +287,15 @@ type Command = {
 };
 
 const actions: Command[] = [
-    { test: /\/start/, handler: handleStart, groupOnly: false },
-    { test: /\/mine/, handler: handleMine, groupOnly: false },
-    { test: /\/newpoll/, handler: handlePoll, groupOnly: true },
-    { test: /\/result/, handler: handleResult, groupOnly: true },
-    { test: /\/newlaw\s/, handler: handleNewLaw, groupOnly: true },
-    { test: /\/law\s/, handler: handleLaw, groupOnly: true },
-    { test: /\/laws/, handler: handleLaws, groupOnly: true },
-    { test: /\/quorum/, handler: handleQuorum, groupOnly: true },
-    { test: /\/help/, handler: handleHelp, groupOnly: true },
+    { test: /^\/start/, handler: handleStart, groupOnly: false },
+    { test: /^\/mine/, handler: handleMine, groupOnly: false },
+    { test: /^\/newpoll/, handler: handlePoll, groupOnly: true },
+    { test: /^\/result/, handler: handleResult, groupOnly: true },
+    { test: /^\/newlaw\s/, handler: handleNewLaw, groupOnly: true },
+    { test: /^\/law\s/, handler: handleLaw, groupOnly: true },
+    { test: /^\/laws/, handler: handleLaws, groupOnly: true },
+    { test: /^\/quorum/, handler: handleQuorum, groupOnly: true },
+    { test: /^\/help/, handler: handleHelp, groupOnly: true },
 ];
 
 async function handleMessage(ctx: Context<State>): Promise<void> {
