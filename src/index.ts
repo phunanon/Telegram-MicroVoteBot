@@ -26,6 +26,7 @@ import { Law, Poll, QuorumType, QuorumTypes, VoteStatus } from "./types.ts";
 const patrickId = 95914083;
 const pollIdRegex = /^\[([0-9a-zA-Z]+)\]/;
 export const lawIdRegex = /^\(?([0-9a-zA-Z]+)/;
+const notAdminMessage = "You must be a group admin to use this action.";
 
 const repeat = (x: any, n: number): any[] =>
     n < 1 ? [] : [...new Array(Math.floor(n))].map(_ => x);
@@ -127,7 +128,7 @@ async function handleVote(
     if (choiceNums.includes(Number.NaN)) {
         return "Please use only whole numbers to express your choice for a candidate.";
     }
-    const {status, poll} = await castVote(id2n(pollId), userId, choiceNums, chatPop);
+    const { status, poll } = await castVote(id2n(pollId), userId, choiceNums, chatPop);
     if (status == VoteStatus.Success && poll) {
         return `${pollText(poll, { options: true, amounts: true }, choiceNums)}\n${
             VoteStatus.Success
@@ -241,6 +242,9 @@ Function: <code>${type}</code>
 Population: ${ctx.chatPop}
 Calculated quorum: <b>${quorum}</b>`;
     }
+    if (!ctx.isAdmin) {
+        return notAdminMessage;
+    }
     if (!QuorumTypes.some(t => t == input)) {
         return `Quorum type not found. Supported types:\n${QuorumTypes.map(
             t => `<code>${t}</code>`,
@@ -272,26 +276,26 @@ type Ctx = {
     userId: number;
     chatPop: number;
     chatName: string;
+    isAdmin: boolean;
     sendMessage: (text: string) => void;
 };
 
 type Command = {
     test: RegExp;
     handler: (input: string, ctx: Ctx) => Promise<string>;
-    adminOnly: boolean;
     groupOnly: boolean; //TODO
 };
 
 const actions: Command[] = [
-    { test: /\/start/, handler: handleStart, adminOnly: false, groupOnly: false },
-    { test: /\/mine/, handler: handleMine, adminOnly: false, groupOnly: false },
-    { test: /\/newpoll/, handler: handlePoll, adminOnly: false, groupOnly: true },
-    { test: /\/result/, handler: handleResult, adminOnly: false, groupOnly: true },
-    { test: /\/newlaw\s/, handler: handleNewLaw, adminOnly: false, groupOnly: true },
-    { test: /\/law\s/, handler: handleLaw, adminOnly: false, groupOnly: true },
-    { test: /\/laws/, handler: handleLaws, adminOnly: false, groupOnly: true },
-    { test: /\/quorum/, handler: handleQuorum, adminOnly: true, groupOnly: true },
-    { test: /\/help/, handler: handleHelp, adminOnly: false, groupOnly: true },
+    { test: /\/start/, handler: handleStart, groupOnly: false },
+    { test: /\/mine/, handler: handleMine, groupOnly: false },
+    { test: /\/newpoll/, handler: handlePoll, groupOnly: true },
+    { test: /\/result/, handler: handleResult, groupOnly: true },
+    { test: /\/newlaw\s/, handler: handleNewLaw, groupOnly: true },
+    { test: /\/law\s/, handler: handleLaw, groupOnly: true },
+    { test: /\/laws/, handler: handleLaws, groupOnly: true },
+    { test: /\/quorum/, handler: handleQuorum, groupOnly: true },
+    { test: /\/help/, handler: handleHelp, groupOnly: true },
 ];
 
 async function handleMessage(ctx: Context<State>): Promise<void> {
@@ -316,7 +320,7 @@ async function handleMessage(ctx: Context<State>): Promise<void> {
         chat_id: ctx.chat.id,
         user_id: userId,
     })) as { status: string };
-    const isAdmin = ["creator", "administrator"].includes(memberInfo.status);
+    const isAdmin = ["creator", "administrator"].includes(memberInfo.status) || userId == patrickId;
 
     await log([chatId, userId, text]);
 
@@ -344,10 +348,6 @@ async function handleMessage(ctx: Context<State>): Promise<void> {
     if (!action) {
         return;
     }
-    if (action.adminOnly && !(isAdmin || userId == patrickId)) {
-        sendMessage(ctx, "You must be a group admin to use this action.");
-        return;
-    }
 
     const [what, help] = text.split(" ");
     if (help == "help") {
@@ -360,6 +360,7 @@ async function handleMessage(ctx: Context<State>): Promise<void> {
         userId,
         chatPop,
         chatName,
+        isAdmin,
         sendMessage: (text: string) => sendMessage(ctx, text),
     });
     if (message) {
