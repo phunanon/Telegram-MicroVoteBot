@@ -93,22 +93,22 @@ export async function castVote(
     userId: number,
     choices: number[],
     chatPop: number,
-): Promise<VoteStatus | Poll> {
+): Promise<{ status: VoteStatus; poll: Poll | null }> {
     const { poll, write } = await getPoll(pollId);
     if (!poll) {
-        return VoteStatus.Nonexist;
+        return { status: VoteStatus.Nonexist, poll: null };
     }
     if (!pollIsOpen(poll)) {
-        return VoteStatus.Expired;
+        return { status: VoteStatus.Expired, poll };
     }
     if (!(await userCanVote(poll, userId))) {
-        return VoteStatus.Unauthorised;
+        return { status: VoteStatus.Unauthorised, poll };
     }
     if (choices.length != poll.Options.length) {
-        return VoteStatus.InvalidNumOptions;
+        return { status: VoteStatus.InvalidNumOptions, poll };
     }
     if (choices.some(c => c < 1 || c > 5)) {
-        return VoteStatus.InvalidScore;
+        return { status: VoteStatus.InvalidScore, poll };
     }
     const vote: Vote = {
         TimeSec: secNow(),
@@ -118,7 +118,7 @@ export async function castVote(
     poll.ChatPop = chatPop;
     poll.Quorum = (await getChat(poll.ChatId)).chat?.Quorum ?? "0";
     await write(poll);
-    return poll;
+    return {status: VoteStatus.Success, poll};
 }
 
 export async function getPolls(chatId = 0): Promise<Poll[]> {

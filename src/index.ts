@@ -21,7 +21,7 @@ import {
 import { LawResult, LawResultStatus, lawResult } from "./LawResult.ts";
 import { makeConstitution } from "./MakeConstitution.ts";
 import { exec } from "https://deno.land/x/2exec/mod.ts";
-import { instanceOfPoll, Law, Poll, QuorumType, QuorumTypes, VoteStatus } from "./types.ts";
+import { Law, Poll, QuorumType, QuorumTypes, VoteStatus } from "./types.ts";
 
 const patrickId = 95914083;
 const pollIdRegex = /^\[([0-9a-zA-Z]+)\]/;
@@ -127,13 +127,13 @@ async function handleVote(
     if (choiceNums.includes(Number.NaN)) {
         return "Please use only whole numbers to express your choice for a candidate.";
     }
-    const pollOrStatus = await castVote(id2n(pollId), userId, choiceNums, chatPop);
-    if (instanceOfPoll(pollOrStatus)) {
-        return `${pollText(pollOrStatus, { options: true, amounts: true }, choiceNums)}\n${
+    const {status, poll} = await castVote(id2n(pollId), userId, choiceNums, chatPop);
+    if (status == VoteStatus.Success && poll) {
+        return `${pollText(poll, { options: true, amounts: true }, choiceNums)}\n${
             VoteStatus.Success
         }.`;
     }
-    return `${pollOrStatus}.`;
+    return `${status}.`;
 }
 
 async function handleResult(input: string): Promise<string> {

@@ -16,8 +16,6 @@ export interface Poll {
     Votes: { [voterId: number]: Vote };
 }
 
-export const instanceOfPoll = (obj: any): obj is Poll => obj.hasOwnProperty("Votes");
-
 export interface Law {
     TimeSec: number;
     Name: string;
