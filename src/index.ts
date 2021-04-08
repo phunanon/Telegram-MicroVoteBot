@@ -17,6 +17,7 @@ import {
     calcPollResult,
     setChatQuorum,
     calcChatQuorum,
+    calcPollQuorum,
 } from "./db.ts";
 import { LawResult, LawResultStatus, lawResult } from "./LawResult.ts";
 import { makeConstitution } from "./MakeConstitution.ts";
@@ -154,9 +155,9 @@ async function handleResult(input: string): Promise<string> {
     const numVotes = Object.values(poll.Votes).length;
     return `${pollText(poll, { options: true, desc: true, amounts: true }, avgs)}
 <b>${plural(numVotes, "vote_")}, ${((numVotes / poll.ChatPop) * 100).toFixed(2)}% turnout</b>
-This poll <b>${reachedQuorum ? "reached" : "did not reach"}</b> its quorum of <code>${
-        poll.Quorum
-    }</code> at with ${poll.ChatPop} potential voters.`;
+<b>${reachedQuorum ? "Reached" : "Did not reach"}</b> its quorum of ${calcPollQuorum(poll)} with ${
+        poll.ChatPop
+    } potential voters.`;
 }
 
 async function handleMine(input: string, ctx: Ctx): Promise<string> {

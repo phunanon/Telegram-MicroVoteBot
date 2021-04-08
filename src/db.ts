@@ -59,6 +59,8 @@ export async function calcChatQuorum(
     return { quorum: calcQuorum(chatPop, chat.Quorum), type: chat.Quorum };
 }
 
+export const calcPollQuorum = (poll: Poll): number => calcQuorum(poll.ChatPop, poll.Quorum);
+
 export function calcPollResult(
     poll: Poll,
 ): { reachedQuorum: boolean; result: { option: string; average: number }[] } {
