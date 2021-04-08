@@ -18,10 +18,11 @@ import {
     pollIsOpen,
     id2n,
     getLaw,
-    getPollResult,
+    calcPollResult,
     QuorumTypes,
     setChatQuorum,
     QuorumType,
+    calcChatQuorum,
 } from "./db.ts";
 import { LawResult, LawResultStatus, lawResult } from "./LawResult.ts";
 import { makeConstitution } from "./MakeConstitution.ts";
@@ -85,7 +86,6 @@ const sendMessage = async (ctx: Context<State>, text: string) =>
 
 async function handlePoll(input: string, ctx: Ctx): Promise<string> {
     let [period, name, desc, ...options] = input.split("\n").map(str => str.trim());
-    console.log(name);
     if (!period || !name || !desc || !options.length) {
         return await helpFor("poll");
     }
@@ -154,7 +154,7 @@ async function handleResult(input: string): Promise<string> {
     if (pollIsOpen(poll) && false) {
         return "This poll is still open; results can only be provided once the poll closes.";
     }
-    const { reachedQuorum, result } = await getPollResult(poll);
+    const { reachedQuorum, result } = await calcPollResult(poll);
     const avgs = result.map(r => r.average);
     const numVotes = Object.values(poll.Votes).length;
     return `${pollText(poll, { options: true, desc: true, amounts: true }, avgs)}
@@ -240,6 +240,13 @@ async function handleLaws(input: string, ctx: Ctx): Promise<string> {
 }
 
 async function handleQuorum(input: string, ctx: Ctx): Promise<string> {
+    if (!input) {
+        const { quorum, type } = await calcChatQuorum(ctx.chatPop, ctx.chatId);
+        return `
+Function: <code>${type}</code>
+Population: ${ctx.chatPop}
+Calculated quorum: <b>${quorum}</b>`;
+    }
     if (!QuorumTypes.some(t => t == input)) {
         return `Quorum type not found. Supported types:\n${QuorumTypes.map(
             t => `<code>${t}</code>`,
@@ -304,7 +311,7 @@ async function handleMessage(ctx: Context<State>): Promise<void> {
     }
 
     const text = ctx.message.text;
-    const input = text.replace(/.+?\s(.+)/, "$1").trim();
+    const input = text.replace(/^\/\w+/, "").trim();
     const chatId = ctx.chat.id;
     const chatName = ctx.chat.id == ctx.me.id ? "Myself" : ctx.chat.title ?? "Unknown";
     const userId = ctx.message.from.id;

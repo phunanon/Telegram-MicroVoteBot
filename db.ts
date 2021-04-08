@@ -90,7 +90,21 @@ export function getLawFromChat(chat: Chat, lawId: number): Law | null {
     return chat.Laws.find(l => l.TimeSec == lawId) ?? null;
 }
 
-export function getPollResult(
+const calcQuorum = (chatPop: number, quorum: QuorumType): number =>
+    eval(`const n = ${chatPop}, sqrt = Math.sqrt, floor = Math.floor, ceil = Math.ceil; ${quorum}`);
+
+export async function calcChatQuorum(
+    chatPop: number,
+    chatId: number,
+): Promise<{ quorum: number; type: QuorumType }> {
+    const { chat } = await getChat(chatId);
+    if (!chat) {
+        return { quorum: 0, type: "0" };
+    }
+    return { quorum: calcQuorum(chatPop, chat.Quorum), type: chat.Quorum };
+}
+
+export function calcPollResult(
     poll: Poll,
 ): { reachedQuorum: boolean; result: { option: string; average: number }[] } {
     const votes = Object.values(poll.Votes);
@@ -99,10 +113,7 @@ export function getPollResult(
         poll.Options.map(() => 0),
     );
     return {
-        reachedQuorum:
-            eval(
-                `const n = ${poll.ChatPop}, sqrt = Math.sqrt, floor = Math.floor, ceil = Math.ceil; ${poll.Quorum}`,
-            ) <= votes.length,
+        reachedQuorum: calcQuorum(poll.ChatPop, poll.Quorum) <= votes.length,
         result: sums.map((s, i) => ({ option: poll.Options[i], average: s / votes.length })),
     };
 }

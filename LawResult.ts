@@ -1,4 +1,4 @@
-import { getPoll, getPollResult, Law } from "./db.ts";
+import { getPoll, calcPollResult, Law } from "./db.ts";
 import { lawIdRegex } from "./index.ts";
 
 export enum LawResultStatus {
@@ -19,7 +19,7 @@ export async function lawResult(law: Law): Promise<LawResult> {
     if (!poll) {
         return { status: LawResultStatus.PollNonexist, law, pc: 0 };
     }
-    const { reachedQuorum, result } = await getPollResult(poll);
+    const { reachedQuorum, result } = calcPollResult(poll);
     const pc = ((result.find(o => lawIdRegex.test(o.option))?.average ?? 0) / poll.Width) * 100;
     return {
         status: !reachedQuorum
