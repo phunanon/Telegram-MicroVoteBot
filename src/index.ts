@@ -22,7 +22,7 @@ import {
 import { LawResult, LawResultStatus, lawResult } from "./LawResult.ts";
 import { makeConstitution } from "./MakeConstitution.ts";
 import { exec } from "https://deno.land/x/2exec/mod.ts";
-import { Law, Poll, QuorumType, QuorumTypes, VoteStatus } from "./types.ts";
+import { Law, NewItemStatus, Poll, QuorumType, QuorumTypes, VoteStatus } from "./types.ts";
 
 const patrickId = 95914083;
 const pollIdRegex = /^\[([0-9a-zA-Z]+)\]/;
@@ -80,7 +80,7 @@ const unicodeHorizontalBar = (width: number, fraction: number) => {
 const sendMessage = async (ctx: Context<State>, text: string) =>
     await ctx.telegram.sendMessage({ chat_id: ctx.chat?.id ?? 0, text, parse_mode: "HTML" });
 
-async function handlePoll(input: string, ctx: Ctx): Promise<string> {
+async function handlePoll(input: string, { chatId, chatPop, userId }: Ctx): Promise<string> {
     const [period, name, desc, ...options] = input.split("\n").map(str => str.trim());
     if (!period || !name || !desc || !options.length) {
         return await helpFor("poll");
@@ -97,21 +97,25 @@ async function handlePoll(input: string, ctx: Ctx): Promise<string> {
     }, 0);
     const poll: Poll = {
         TimeSec: secNow(),
-        ChatId: ctx.chatId,
+        ChatId: chatId,
         Minutes: minutes,
         Name: name,
         Desc: desc,
         Options: options,
         Width: 5,
-        ChatPop: ctx.chatPop,
+        ChatPop: chatPop,
         Quorum: "0",
         Votes: {},
     };
     const laws = options.filter(o => lawIdRegex.test(o)).map(o => o.match(lawIdRegex)?.[1] ?? "");
-    newPoll(
+    const status = await newPoll(
         poll,
         laws.map(i => id2n(i)),
+        userId,
     );
+    if (status != NewItemStatus.Success) {
+        return `${status}.`;
+    }
     return `${pollText(
         poll,
         {},
@@ -194,7 +198,7 @@ async function handleLaw(input: string, ctx: Ctx): Promise<string> {
     return showLawResult(await lawResult(law));
 }
 
-async function handleNewLaw(input: string, ctx: Ctx): Promise<string> {
+async function handleNewLaw(input: string, { chatId, userId }: Ctx): Promise<string> {
     const [name, ...body] = input.split("\n");
     if (!name || !body.length) {
         return await helpFor("law");
@@ -205,7 +209,10 @@ async function handleNewLaw(input: string, ctx: Ctx): Promise<string> {
         Body: body.join("\n"),
         LatestPollId: null,
     };
-    newLaw(ctx.chatId, law);
+    const status = await newLaw(law, chatId, userId);
+    if (status != NewItemStatus.Success) {
+        return `${status}.`;
+    }
     return lawText(law);
 }
 
@@ -298,7 +305,7 @@ const actions: Command[] = [
     { test: /^\/mine/, handler: handleMine, usedIn: CommandArea.Bot },
     { test: /^\/newpoll/, handler: handlePoll, usedIn: CommandArea.Group },
     { test: /^\/result/, handler: handleResult, usedIn: CommandArea.Both },
-    { test: /^\/newlaw\s/, handler: handleNewLaw, usedIn: CommandArea.Group },
+    { test: /^\/newlaw/, handler: handleNewLaw, usedIn: CommandArea.Group },
     { test: /^\/law\s/, handler: handleLaw, usedIn: CommandArea.Group },
     { test: /^\/laws/, handler: handleLaws, usedIn: CommandArea.Group },
     { test: /^\/quorum/, handler: handleQuorum, usedIn: CommandArea.Group },

@@ -25,9 +25,21 @@ export interface Law {
 
 export interface Chat {
     Name: string;
-    LastSeenSec: { [userId: number]: number };
+    Users: { [userId: number]: User };
     Laws: Law[];
     Quorum: QuorumType;
+    DailyLimits: {
+        MemberPolls: number;
+        MemberLaws: number;
+    };
+}
+
+export interface User {
+    LastSeenSec: number;
+    Latest: {
+        PollIds: number[];
+        LawIds: number[];
+    }
 }
 
 export enum VoteStatus {
@@ -37,6 +49,12 @@ export enum VoteStatus {
     Nonexist = "Poll does not exist",
     InvalidNumOptions = "Invalid number of options",
     InvalidScore = "Scores must be between 1 and 5",
+}
+
+export enum NewItemStatus {
+    UnknownError = "An unknown error occurred",
+    RateLimited = "You have reached your maximum number of new items of this type per day",
+    Success = "",
 }
 
 export const QuorumTypes = ["0", "4", "ceil(sqrt(n * 2))", "floor(sqrt(n))"] as const;
