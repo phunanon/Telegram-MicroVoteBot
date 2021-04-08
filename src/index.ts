@@ -5,29 +5,23 @@ import {
     castVote,
     newPoll,
     logUser,
-    Poll,
     getLaws,
-    Law,
     newLaw,
-    VoteStatus,
     getUserPolls,
     n2id,
     secNow,
     getPoll,
-    instanceOfPoll,
     pollIsOpen,
     id2n,
     getLaw,
     calcPollResult,
-    QuorumTypes,
     setChatQuorum,
-    QuorumType,
     calcChatQuorum,
 } from "./db.ts";
 import { LawResult, LawResultStatus, lawResult } from "./LawResult.ts";
 import { makeConstitution } from "./MakeConstitution.ts";
-import { SendDocumentParameters } from "https://deno.land/x/telegram@v0.1.1/types.ts";
 import { exec } from "https://deno.land/x/2exec/mod.ts";
+import { instanceOfPoll, Law, Poll, QuorumType, QuorumTypes, VoteStatus } from "./types.ts";
 
 const patrickId = 95914083;
 const pollIdRegex = /^\[([0-9a-zA-Z]+)\]/;
@@ -85,7 +79,7 @@ const sendMessage = async (ctx: Context<State>, text: string) =>
     await ctx.telegram.sendMessage({ chat_id: ctx.chat?.id ?? 0, text, parse_mode: "HTML" });
 
 async function handlePoll(input: string, ctx: Ctx): Promise<string> {
-    let [period, name, desc, ...options] = input.split("\n").map(str => str.trim());
+    const [period, name, desc, ...options] = input.split("\n").map(str => str.trim());
     if (!period || !name || !desc || !options.length) {
         return await helpFor("poll");
     }

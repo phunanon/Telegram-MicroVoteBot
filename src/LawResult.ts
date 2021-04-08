@@ -1,5 +1,6 @@
-import { getPoll, calcPollResult, Law } from "./db.ts";
+import { getPoll, calcPollResult } from "./db.ts";
 import { lawIdRegex } from "./index.ts";
+import { Law } from "./types.ts";
 
 export enum LawResultStatus {
     NeverPolled = "Has never been voted on.",
