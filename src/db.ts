@@ -133,7 +133,7 @@ export async function castVote(
     if (!poll) {
         return { status: VoteStatus.Nonexist, poll: null };
     }
-    if (!pollIsOpen(poll)) {
+    if (!isPollOpen(poll)) {
         return { status: VoteStatus.Expired, poll };
     }
     if (!(await userCanVote(poll, userId))) {
@@ -212,7 +212,7 @@ export async function newLaw(law: Law, chatId: number, userId: number): Promise<
     return NewItemStatus.Success;
 }
 
-export const pollIsOpen = (poll: Poll): boolean => secNow() < poll.TimeSec + poll.Minutes * 60;
+export const isPollOpen = (poll: Poll): boolean => secNow() < poll.TimeSec + poll.Minutes * 60;
 
 export async function userCanVote(poll: Poll, userId: number): Promise<boolean> {
     const { chat } = await getChat(poll.ChatId);

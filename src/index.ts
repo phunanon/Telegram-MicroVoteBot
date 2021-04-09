@@ -11,7 +11,7 @@ import {
     n2id,
     secNow,
     getPoll,
-    pollIsOpen,
+    isPollOpen,
     id2n,
     getLaw,
     calcPollResult,
@@ -29,9 +29,8 @@ const pollIdRegex = /^\[([0-9a-zA-Z]+)\]/;
 export const lawIdRegex = /^\(?([0-9a-zA-Z]+)/;
 const notAdminMessage = "You must be a group admin to use this action.";
 
-const repeat = (x: any, n: number): any[] =>
-    n < 1 ? [] : [...new Array(Math.floor(n))].map(_ => x);
-const repeatStr = (x: any, n: number): string => repeat(x, n).join("");
+const repeatStr = (x: string, n: number): string =>
+    n < 1 ? "" : [...new Array(Math.floor(n))].map(_ => x).join("");
 const plural = (n: number, w: string) => `${n} ${w.replace("_", n != 1 ? "s" : "")}`;
 const drop1stLine = (lines: string): string => lines.split("\n").slice(1).join("\n");
 const showChoiceAmount = (n: number, width: number): string =>
@@ -151,7 +150,7 @@ async function handleResult(input: string): Promise<string> {
     if (poll == null) {
         return "Poll not found.";
     }
-    if (pollIsOpen(poll) && false) {
+    if (isPollOpen(poll) && false) { //TODO
         return "This poll is still open; results can only be provided once the poll closes.";
     }
     const { reachedQuorum, result } = await calcPollResult(poll);
@@ -230,7 +229,7 @@ async function handleLaws(input: string, ctx: Ctx): Promise<string> {
     }
 
     const pdfBytes = await makeConstitution(results, ctx.chatName);
-    const fileName = `${ctx.chatName} Constitution.pdf`;
+    const fileName = `${ctx.chatName} ${showAll ? "Laws" : "Constitution"}.pdf`;
     await Deno.writeFile(fileName, pdfBytes);
     await Deno.writeTextFile(
         "uploadConstitution.sh",
@@ -339,7 +338,7 @@ async function handleMessage(ctx: Context<State>): Promise<void> {
 
     //Log user activity in this chat for future authorisation
     if (chatId < 0) {
-    logUser(chatId, chatName, userId);
+        logUser(chatId, chatName, userId);
     }
 
     //Check if user is replying to one of our poll messages (voting)
