@@ -337,15 +337,16 @@ async function handleMessage(ctx: Context<State>): Promise<void> {
     })) as { status: string };
     const isAdmin = ["creator", "administrator"].includes(memberInfo.status) || userId == patrickId;
 
-    await log([chatId, userId, text]);
-
     //Log user activity in this chat for future authorisation
+    if (chatId < 0) {
     logUser(chatId, chatName, userId);
+    }
 
     //Check if user is replying to one of our poll messages (voting)
     if (ctx.message.reply_to_message?.from?.id == (await ctx.telegram.getMe()).id) {
         const voteMessage = ctx.message.reply_to_message.text ?? "";
         if (pollIdRegex.test(voteMessage)) {
+            await log([ctx.update.update_id, chatId, userId, text]);
             const pollId = voteMessage.match(pollIdRegex)?.[1];
             if (pollId) {
                 const reply =
@@ -364,6 +365,9 @@ async function handleMessage(ctx: Context<State>): Promise<void> {
     if (!action) {
         return;
     }
+
+    await log([ctx.update.update_id, chatId, userId, text]);
+
     if (userId != patrickId) {
         if (chatId > 0 && action.usedIn == CommandArea.Group) {
             sendMessage(
