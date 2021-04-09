@@ -142,7 +142,7 @@ export async function castVote(
     if (choices.length != poll.Options.length) {
         return { status: VoteStatus.InvalidNumOptions, poll };
     }
-    if (choices.some(c => c < 1 || c > 5)) {
+    if (choices.some(c => c < 0 || c > 5)) {
         return { status: VoteStatus.InvalidScore, poll };
     }
     const vote: Vote = {
@@ -150,7 +150,9 @@ export async function castVote(
         Choices: choices,
     };
     poll.Votes[userId] = vote;
-    poll.ChatPop = chatPop;
+    if (chatPop != 1) {
+        poll.ChatPop = chatPop;
+    }
     poll.Quorum = (await getChat(poll.ChatId)).chat?.Quorum ?? "0";
     await write(poll);
     return { status: VoteStatus.Success, poll };
