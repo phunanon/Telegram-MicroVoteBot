@@ -119,7 +119,7 @@ async function handlePoll(input: string, { chatId, chatPop, userId }: Ctx): Prom
     return `${pollText(
         poll,
         {},
-    )}\nYou must message in this chat prior to casting your vote, then use /mine in <a href="https://t.me/MicroVoteBot">this chat</a>.`;
+    )}\nEither reply with your vote directly to this message\nor message in this chat prior to casting your vote, then use /mine in <a href="https://t.me/MicroVoteBot">this chat</a>.`;
 }
 
 async function handleVote(
@@ -131,7 +131,7 @@ async function handleVote(
     const choices = input.split(" ");
     const choiceNums = choices.map(s => parseInt(s));
     if (choiceNums.includes(Number.NaN)) {
-        return "Please use only whole numbers to express your choice for a candidate.";
+        return "";
     }
     const { status, poll } = await castVote(id2n(pollId), userId, choiceNums, chatPop);
     if (status == VoteStatus.Success && poll) {
@@ -174,7 +174,8 @@ async function handleMine(input: string, ctx: Ctx): Promise<string> {
         .forEach((b, i) => {
             setTimeout(() => ctx.sendMessage(pollText(b, { options: true })), (i + 1) * 100);
         });
-    return `To cast a vote, reply to each poll message with your choices, as scores from 1 to 5, such as:<code> 1 3 5 2</code>
+    return `To cast a vote, reply to each poll message with your choices, as scores from 0 to 5, such as:<code> 1 0 5 2</code>
+The number of choices you provide will be the same as the number of options, e.g. if there is one option, you reply with one choice.
 You can re-vote by doing the same again or replying to your own vote message.
 Polls you can vote in now:`;
 }
@@ -347,12 +348,13 @@ async function handleMessage(ctx: Context<State>): Promise<void> {
         if (pollIdRegex.test(voteMessage)) {
             const pollId = voteMessage.match(pollIdRegex)?.[1];
             if (pollId) {
-                sendMessage(
-                    ctx,
+                const reply =
                     text == "/result"
                         ? await handleResult(`[${pollId}]`)
-                        : await handleVote(text, pollId, userId, chatPop),
-                );
+                        : await handleVote(text, pollId, userId, chatPop);
+                if (reply) {
+                    sendMessage(ctx, reply);
+                }
             }
             return;
         }
