@@ -8,7 +8,6 @@ import {
     getLaws,
     newLaw,
     getUserPolls,
-    n2id,
     secNow,
     getPoll,
     isPollOpen,
@@ -19,81 +18,35 @@ import {
     calcChatQuorum,
     calcPollQuorum,
 } from "./db.ts";
-import { LawResult, LawResultStatus, lawResult } from "./LawResult.ts";
+import { LawResultStatus, lawResult } from "./LawResult.ts";
 import { makeConstitution } from "./MakeConstitution.ts";
 import { exec } from "https://deno.land/x/2exec/mod.ts";
 import { Law, NewItemStatus, Poll, QuorumType, QuorumTypes, VoteStatus } from "./types.ts";
+import { lawText, pollText, showLawResult } from "./display.ts";
+import { toMin } from "./dates.ts";
 
 const patrickId = 95914083;
 const pollIdRegex = /^\[([0-9a-zA-Z]+)\]/;
 export const lawIdRegex = /^\(?([0-9a-zA-Z]+)/;
 const notAdminMessage = "You must be a group admin to use this action.";
 
-const repeatStr = (x: string, n: number): string =>
-    n < 1 ? "" : [...new Array(Math.floor(n))].map(_ => x).join("");
 const plural = (n: number, w: string) => `${n} ${w.replace("_", n != 1 ? "s" : "")}`;
 const drop1stLine = (lines: string): string => lines.split("\n").slice(1).join("\n");
-const showChoiceAmount = (n: number, width: number): string =>
-    unicodeHorizontalBar(width, n / width);
-
-type ShowPollOptions = { options?: boolean; desc?: boolean; amounts?: boolean };
-function pollText(poll: Poll, show: ShowPollOptions, amounts: number[] = []) {
-    const options = show.amounts
-        ? poll.Options.map((o, i) => ({ text: o, i, amount: amounts[i] })).sort(
-              (a, b) => b.amount - a.amount,
-          )
-        : poll.Options.map((o, i) => ({ text: o, i, amount: i }));
-    return (
-        `<code>[${n2id(poll.TimeSec)}]</code> <b>${poll.Name}</b>` +
-        (show.desc ? `\n${poll.Desc}` : "") +
-        (show.options
-            ? options
-                  .map(
-                      opt =>
-                          `\n<code>${
-                              show.amounts
-                                  ? `${showChoiceAmount(
-                                        opt.amount,
-                                        poll.Width,
-                                    )} ${opt.amount.toFixed(2)}`
-                                  : ""
-                          } </code> ${opt.i + 1}. ${opt.text}`,
-                  )
-                  .join("")
-            : "")
-    );
-}
-
-const lawText = (law: Law) => `<code>(${n2id(law.TimeSec)})</code> <b>${law.Name}</b>\n${law.Body}`;
-
-const unicodeHorizontalBar = (width: number, fraction: number) => {
-    fraction = Math.min(1, Math.max(fraction, 0));
-    const wholeWidth = Math.floor(fraction * width);
-    const remainderWidth = (fraction * width) % 1;
-    const endWidth = width - wholeWidth - 1;
-    const partWidth = Math.floor(remainderWidth * 8);
-    const partChar = endWidth < 0 ? "" : [" ", "▏", "▎", "▍", "▌", "▋", "▊", "▉"][partWidth];
-    return repeatStr("▉", wholeWidth) + partChar + repeatStr(" ", endWidth);
-};
 
 const sendMessage = async (ctx: Context<State>, text: string) =>
-    await ctx.telegram.sendMessage({ chat_id: ctx.chat?.id ?? 0, text, parse_mode: "HTML" });
+    await ctx.telegram.sendMessage({
+        chat_id: ctx.chat?.id ?? 0,
+        text,
+        parse_mode: "HTML",
+        disable_notification: true,
+    });
 
 async function handlePoll(input: string, { chatId, chatPop, userId }: Ctx): Promise<string> {
     const [period, name, desc, ...options] = input.split("\n").map(str => str.trim());
-    if (!period || !name || !desc || !options.length) {
+    if (!period || !name || !options.length) {
         return await helpFor("poll");
     }
-    const minutes = period.split(" ").reduce((min, txt) => {
-        const { n, t } = txt.match(/(?<n>\d+)(?<t>[mhdMy])/)?.groups ?? {};
-        const m = 1,
-            h = m * 60,
-            d = h * 24,
-            y = d * 365,
-            M = y / 12;
-        const times: { [key: string]: number } = { m, h, d, M, y };
-        return min + parseInt(n) * (times[t] || 0);
-    }, 0);
+    const minutes = toMin(period);
     const poll: Poll = {
         TimeSec: secNow(),
         ChatId: chatId,
@@ -150,7 +103,8 @@ async function handleResult(input: string): Promise<string> {
     if (poll == null) {
         return "Poll not found.";
     }
-    if (isPollOpen(poll) && false) { //TODO
+    if (isPollOpen(poll) && false) {
+        //TODO
         return "This poll is still open; results can only be provided once the poll closes.";
     }
     const { reachedQuorum, result } = await calcPollResult(poll);
@@ -178,13 +132,6 @@ The number of choices you provide will be the same as the number of options, e.g
 You can re-vote by doing the same again or replying to your own vote message.
 Polls you can vote in now:`;
 }
-
-const showLawResult = ({ status, law, pc }: LawResult): string =>
-    `<b>${status}</b>${
-        [LawResultStatus.Accepted, LawResultStatus.Rejected].includes(status)
-            ? ` at ${pc.toFixed(2)}% approval.`
-            : ""
-    }\n${lawText(law)}`;
 
 async function handleLaw(input: string, ctx: Ctx): Promise<string> {
     const lawId = input.match(lawIdRegex)?.[1];
