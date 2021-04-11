@@ -1,5 +1,5 @@
 import { config } from "https://deno.land/x/dotenv/mod.ts";
-import { Bot, Context } from "https://deno.land/x/telegram@v0.1.1/mod.ts";
+import { Bot, Context, Telegram } from "https://deno.land/x/telegram@v0.1.1/mod.ts";
 import { State } from "https://deno.land/x/telegram@v0.1.1/context.ts";
 import {
     castVote,
@@ -33,18 +33,10 @@ const notAdminMessage = "You must be a group admin to use this action.";
 const plural = (n: number, w: string) => `${n} ${w.replace("_", n != 1 ? "s" : "")}`;
 const drop1stLine = (lines: string): string => lines.split("\n").slice(1).join("\n");
 
-const sendMessage = async (ctx: Context<State>, text: string) =>
-    await ctx.telegram.sendMessage({
-        chat_id: ctx.chat?.id ?? 0,
-        text,
-        parse_mode: "HTML",
-        disable_notification: true,
-    });
-
-async function handlePoll(input: string, { chatId, chatPop, userId }: Ctx): Promise<string> {
+async function handleNewPoll(input: string, { chatId, chatPop, userId }: Ctx): Promise<string> {
     const [period, name, desc, ...options] = input.split("\n").map(str => str.trim());
     if (!period || !name || !options.length) {
-        return await helpFor("poll");
+        return await helpFor("newpoll");
     }
     const minutes = toMin(period);
     const poll: Poll = {
@@ -117,15 +109,15 @@ async function handleResult(input: string): Promise<string> {
     } potential voters.`;
 }
 
-async function handleMine(input: string, ctx: Ctx): Promise<string> {
-    const polls = await getUserPolls(ctx.userId);
+async function handleMine(input: string, { userId, sendMessage }: Ctx): Promise<string> {
+    const polls = await getUserPolls(userId);
     if (!polls.length) {
         return "There are no polls for you right now.";
     }
     polls
         .sort((a, b) => a.TimeSec - b.TimeSec)
         .forEach((b, i) => {
-            setTimeout(() => ctx.sendMessage(pollText(b, { options: true })), (i + 1) * 100);
+            setTimeout(() => sendMessage(pollText(b, { options: true })), (i + 1) * 100);
         });
     return `To cast a vote, reply to each poll message with your choices, as scores from 0 to 5, such as:<code> 1 0 5 2</code>
 The number of choices you provide will be the same as the number of options, e.g. if there is one option, you reply with one choice.
@@ -133,12 +125,12 @@ You can re-vote by doing the same again or replying to your own vote message.
 Polls you can vote in now:`;
 }
 
-async function handleLaw(input: string, ctx: Ctx): Promise<string> {
+async function handleLaw(input: string, { chatId }: Ctx): Promise<string> {
     const lawId = input.match(lawIdRegex)?.[1];
     if (!lawId) {
         return "Invalid Law ID.";
     }
-    const { law } = await getLaw(ctx.chatId, id2n(lawId));
+    const { law } = await getLaw(chatId, id2n(lawId));
     if (!law) {
         return "Law not found.";
     }
@@ -163,9 +155,9 @@ async function handleNewLaw(input: string, { chatId, userId }: Ctx): Promise<str
     return lawText(law);
 }
 
-async function handleLaws(input: string, ctx: Ctx): Promise<string> {
+async function handleLaws(input: string, { chatId, chatName }: Ctx): Promise<string> {
     const showAll = input.toLowerCase() == "all";
-    const allResults = await Promise.all((await getLaws(ctx.chatId)).map(lawResult));
+    const allResults = await Promise.all((await getLaws(chatId)).map(lawResult));
     const results = allResults.filter(r => showAll || r.status == LawResultStatus.Accepted);
 
     if (!allResults.length) {
@@ -175,12 +167,12 @@ async function handleLaws(input: string, ctx: Ctx): Promise<string> {
         return "There are no activated laws for this chat. Perhaps try <code>/laws all</code>";
     }
 
-    const pdfBytes = await makeConstitution(results, ctx.chatName);
-    const fileName = `${ctx.chatName} ${showAll ? "Laws" : "Constitution"}.pdf`;
+    const pdfBytes = await makeConstitution(results, chatName);
+    const fileName = `${chatName} ${showAll ? "Laws" : "Constitution"}.pdf`;
     await Deno.writeFile(fileName, pdfBytes);
     await Deno.writeTextFile(
         "uploadConstitution.sh",
-        `curl -F document=@"${fileName}" https://api.telegram.org/bot${token}/sendDocument?chat_id=${ctx.chatId}`,
+        `curl -F document=@"${fileName}" https://api.telegram.org/bot${token}/sendDocument?chat_id=${chatId}`,
     );
     await exec(`sh uploadConstitution.sh`);
     await Deno.remove(fileName);
@@ -189,15 +181,15 @@ async function handleLaws(input: string, ctx: Ctx): Promise<string> {
     return "";
 }
 
-async function handleQuorum(input: string, ctx: Ctx): Promise<string> {
+async function handleQuorum(input: string, { chatId, chatPop, isAdmin }: Ctx): Promise<string> {
     if (!input) {
-        const { quorum, type } = await calcChatQuorum(ctx.chatPop, ctx.chatId);
+        const { quorum, type } = await calcChatQuorum(chatPop, chatId);
         return `
 Function: <code>${type}</code>
-Population: ${ctx.chatPop}
+Population: ${chatPop}
 Calculated quorum: <b>${quorum}</b>`;
     }
-    if (!ctx.isAdmin) {
+    if (!isAdmin) {
         return notAdminMessage;
     }
     if (!QuorumTypes.some(t => t == input)) {
@@ -205,7 +197,7 @@ Calculated quorum: <b>${quorum}</b>`;
             t => `<code>${t}</code>`,
         ).join("\n")}`;
     }
-    await setChatQuorum(ctx.chatId, input as QuorumType);
+    await setChatQuorum(chatId, input as QuorumType);
     return `Quorum set: <code>${input}</code>`;
 }
 
@@ -250,7 +242,7 @@ type Command = {
 const actions: Command[] = [
     { test: /^\/start/, handler: handleStart, usedIn: CommandArea.Bot },
     { test: /^\/mine/, handler: handleMine, usedIn: CommandArea.Bot },
-    { test: /^\/newpoll/, handler: handlePoll, usedIn: CommandArea.Group },
+    { test: /^\/newpoll/, handler: handleNewPoll, usedIn: CommandArea.Group },
     { test: /^\/result/, handler: handleResult, usedIn: CommandArea.Both },
     { test: /^\/newlaw/, handler: handleNewLaw, usedIn: CommandArea.Group },
     { test: /^\/law\s/, handler: handleLaw, usedIn: CommandArea.Group },
@@ -259,49 +251,69 @@ const actions: Command[] = [
     { test: /^\/help/, handler: handleHelp, usedIn: CommandArea.Both },
 ];
 
-async function handleMessage(ctx: Context<State>): Promise<void> {
+async function handleMessage({
+    chat,
+    message,
+    telegram,
+    update: { update_id: updateId },
+}: Context<State>): Promise<void> {
     if (
-        ctx.chat == undefined ||
-        ctx.message == undefined ||
-        ctx.message.from == undefined ||
-        ctx.message.text == undefined
+        chat == undefined ||
+        message == undefined ||
+        message.from == undefined ||
+        message.text == undefined
     ) {
         return;
     }
 
-    const text = ctx.message.text;
+    const {
+        text,
+        reply_to_message: reply,
+        from: { id: userId },
+    } = message;
     const input = text.replace(/^\/\w+/, "").trim();
-    const chatId = ctx.chat.id;
-    const chatName = ctx.chat.id > 0 ? "Myself" : ctx.chat.title ?? "Unknown";
-    const userId = ctx.message.from.id;
+    const { id: chatId, title: chatTitle } = chat;
+    const chatName = chatId > 0 ? "Myself" : chatTitle ?? "Unknown";
     const chatPop =
-        ((await ctx.telegram.method("getChatMembersCount", { chat_id: ctx.chat.id })) as number) -
-        1;
-    const memberInfo = (await ctx.telegram.method("getChatMember", {
-        chat_id: ctx.chat.id,
+        ((await telegram.method("getChatMembersCount", { chat_id: chatId })) as number) - 1;
+    const { status } = (await telegram.method("getChatMember", {
+        chat_id: chatId,
         user_id: userId,
     })) as { status: string };
-    const isAdmin = ["creator", "administrator"].includes(memberInfo.status) || userId == patrickId;
+    const isAdmin = ["creator", "administrator"].includes(status) || userId == patrickId;
 
     //Log user activity in this chat for future authorisation
     if (chatId < 0) {
         logUser(chatId, chatName, userId);
     }
 
+    const sendMessage = async (text: string) =>
+        text &&
+        (await telegram.sendMessage({
+            chat_id: chatId,
+            text,
+            parse_mode: "HTML",
+            disable_notification: true,
+        }));
+    const log = async () =>
+        await Deno.writeTextFile(
+            "log.txt",
+            `${JSON.stringify({ updateId, chatId, userId, text })}\n`,
+            { append: true },
+        );
+
     //Check if user is replying to one of our poll messages (voting)
-    if (ctx.message.reply_to_message?.from?.id == (await ctx.telegram.getMe()).id) {
-        const voteMessage = ctx.message.reply_to_message.text ?? "";
+    if (reply?.from?.id == (await telegram.getMe()).id) {
+        const voteMessage = reply.text ?? "";
         if (pollIdRegex.test(voteMessage)) {
-            await log([ctx.update.update_id, chatId, userId, text]);
+            await log();
             const pollId = voteMessage.match(pollIdRegex)?.[1];
             if (pollId) {
-                const reply =
+                sendMessage(
                     text == "/result"
                         ? await handleResult(`[${pollId}]`)
-                        : await handleVote(text, pollId, userId, chatPop);
-                if (reply) {
-                    sendMessage(ctx, reply);
-                }
+                        : await handleVote(text, pollId, userId, chatPop),
+                );
             }
             return;
         }
@@ -312,19 +324,17 @@ async function handleMessage(ctx: Context<State>): Promise<void> {
         return;
     }
 
-    await log([ctx.update.update_id, chatId, userId, text]);
+    await log();
 
     if (userId != patrickId) {
         if (chatId > 0 && action.usedIn == CommandArea.Group) {
             sendMessage(
-                ctx,
                 "This action can only be used in a group chat with the bot as an admin member.",
             );
             return;
         }
         if (chatId < 0 && action.usedIn == CommandArea.Bot) {
             sendMessage(
-                ctx,
                 `This action can only be used <a href="https://t.me/MicroVoteBot">with the bot directly</a>.`,
             );
             return;
@@ -333,25 +343,20 @@ async function handleMessage(ctx: Context<State>): Promise<void> {
 
     const [what, help] = text.split(" ");
     if (help == "help") {
-        sendMessage(ctx, await helpFor(what.slice(1)));
+        sendMessage(await helpFor(what.slice(1)));
         return;
     }
 
-    const message = await action.handler(input, {
-        chatId,
-        userId,
-        chatPop,
-        chatName,
-        isAdmin,
-        sendMessage: (text: string) => sendMessage(ctx, text),
-    });
-    if (message) {
-        await sendMessage(ctx, message);
-    }
-}
-
-async function log(entry: unknown) {
-    await Deno.writeTextFile("log.txt", `${JSON.stringify(entry)}\n`, { append: true });
+    await sendMessage(
+        await action.handler(input, {
+            chatId,
+            userId,
+            chatPop,
+            chatName,
+            isAdmin,
+            sendMessage,
+        }),
+    );
 }
 
 const token = config().BOT_TOKEN;

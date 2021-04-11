@@ -57,5 +57,5 @@ export enum NewItemStatus {
     Success = "",
 }
 
-export const QuorumTypes = ["0", "4", "ceil(sqrt(n * 2))", "floor(sqrt(n))"] as const;
+export const QuorumTypes = ["0", "3", "4", "ceil(sqrt(n * 2))", "floor(sqrt(n))"] as const;
 export type QuorumType = typeof QuorumTypes[number];

@@ -16,11 +16,13 @@ Shows result for a poll. Either use "/result" in reply to a poll message or:
 
 
 /mine
-TODO
+Shows all polls from all chats which you are able to vote in.
+If you expect to see a poll but it is not visible ensure you have messaged in the group chat since the poll's creation.
 
 
 /law
-TODO
+Takes a Law ID and shows information about a law, used like:
+/law (xxxx)
 
 
 /newlaw
@@ -36,4 +38,4 @@ Shows all the voted on and accepted laws in this chat.
 Shows all laws in this chat, regardless of if it was voted on or rejected.
 
 /quorum
-TODO
+Either calculates the existing quorum or accepts a new quorum function for the group chat.
