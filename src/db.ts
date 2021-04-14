@@ -1,10 +1,7 @@
 import { exists } from "https://deno.land/std/fs/mod.ts";
 import { base62 } from "./base62.ts";
+import { readJson, writeJson } from "./fs.ts";
 import { Chat, Law, NewItemStatus, Poll, QuorumType, User, Vote, VoteStatus } from "./types.ts";
-
-const readJson = async (path: string) => JSON.parse(await Deno.readTextFile(path));
-const writeJson = async (path: string, obj: any) =>
-    await Deno.writeTextFile(path, JSON.stringify(obj, null, 2));
 
 export const secNow = () => Math.floor((Date.now() - Date.UTC(2021, 3, 1)) / 1000);
 const dayAgoSecs = () => secNow() - 60 * 60 * 24;

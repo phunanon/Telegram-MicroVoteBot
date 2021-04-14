@@ -24,6 +24,7 @@ import { exec } from "https://deno.land/x/2exec/mod.ts";
 import { Law, NewItemStatus, Poll, QuorumType, QuorumTypes, VoteStatus } from "./types.ts";
 import { lawText, pollText, showLawResult } from "./display.ts";
 import { toMin } from "./dates.ts";
+import { getAllHelp } from "./fs.ts";
 
 const patrickId = 95914083;
 const pollIdRegex = /^\[([0-9a-zA-Z]+)\]/;
@@ -31,7 +32,6 @@ export const lawIdRegex = /^\(?([0-9a-zA-Z]+)/;
 const notAdminMessage = "You must be a group admin to use this action.";
 
 const plural = (n: number, w: string) => `${n} ${w.replace("_", n != 1 ? "s" : "")}`;
-const drop1stLine = (lines: string): string => lines.split("\n").slice(1).join("\n");
 
 async function handleNewPoll(input: string, { chatId, chatPop, userId }: Ctx): Promise<string> {
     const [period, name, desc, ...options] = input.split("\n").map(str => str.trim());
@@ -201,11 +201,10 @@ Calculated quorum: <b>${quorum}</b>`;
     return `Quorum set: <code>${input}</code>`;
 }
 
-const getAllHelp = async () => (await Deno.readTextFile("help.txt")).split("\n\n\n");
-
 async function handleHelp() {
-    return (await getAllHelp())
-        .map(h => `${h.split("\n")[0]}\n<pre>${drop1stLine(h)}</pre>`)
+    const help = await getAllHelp();
+    return Object.keys(help)
+        .map(action => `/${action}\n${help[action]}`)
         .join("\n");
 }
 
@@ -214,8 +213,7 @@ async function handleStart() {
 }
 
 async function helpFor(what: string): Promise<string> {
-    const help = drop1stLine((await getAllHelp()).find(h => h.startsWith(`/${what}`)) ?? "");
-    return help ? help : "No help found.";
+    return (await getAllHelp())[what] ?? "No help found.";
 }
 
 type Ctx = {

@@ -1,0 +1,9 @@
+{
+  "newpoll": "Creates a new poll. Put details about the poll on different lines like this:\n<pre>/newpoll Period e.g. 5m 1h 1d 2M 1y\nName\nDescription or blank line\nOption one\n...\nOption N</pre>\n\nOptions can begin with a Law ID such as <code>(QR086A)</code> to enable or disable a law by majority vote.",
+  "result": "Shows result for a poll. Either use <code>/result</code> in reply to a poll message or:\n<pre>/result Poll ID e.g. [1234ABC]</pre>",
+  "mine": "Shows all polls from all chats which you are able to vote in.\nIf you expect to see a poll but it is not visible ensure you have messaged in the group chat since the poll's creation.",
+  "law": "Takes a Law ID and shows information about a law, used like:\n<pre>/law (xxxx) or xxxx</pre>",
+  "newlaw": "Creates a new law in this chat. Usage:\n<pre>/newlaw Name\nLegislation body</pre>",
+  "laws": "<code>/laws</code> shows all the voted on and accepted laws in this chat.\n<code>/laws all</code> shows all laws in this chat, regardless of if it was voted on or rejected.",
+  "quorum": "Either calculates the existing quorum or accepts a new quorum function for the group chat."
+}
