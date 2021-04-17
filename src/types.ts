@@ -20,7 +20,7 @@ export interface Law {
     TimeSec: number;
     Name: string;
     Body: string;
-    LatestPollId: number | null;
+    PollIds: number[];
 }
 
 export interface Chat {
@@ -39,7 +39,7 @@ export interface User {
     Latest: {
         PollIds: number[];
         LawIds: number[];
-    }
+    };
 }
 
 export enum VoteStatus {
@@ -57,5 +57,14 @@ export enum NewItemStatus {
     Success = "",
 }
 
-export const QuorumTypes = ["0", "3", "4", "ceil(sqrt(n * 2))", "floor(sqrt(n))"] as const;
+export const QuorumTypes = [
+    "0",
+    "1",
+    "2",
+    "3",
+    "4",
+    "n / 2",
+    "ceil(sqrt(n * 2))",
+    "floor(sqrt(n))",
+] as const;
 export type QuorumType = typeof QuorumTypes[number];

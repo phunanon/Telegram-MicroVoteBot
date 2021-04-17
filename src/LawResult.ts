@@ -1,37 +1,57 @@
-import { getPoll, calcPollResult, isPollOpen } from "./db.ts";
+import { getPoll, isPollOpen } from "./db.ts";
 import { lawIdRegex } from "./index.ts";
-import { Law } from "./types.ts";
+import { calcPollResult } from "./PollResult.ts";
+import { Law, Poll } from "./types.ts";
 
 export enum LawResultStatus {
-    NeverPolled = "Has never been voted on.",
-    PollNonexist = "Historical poll no longer exists.",
-    LowQuorum = "Its poll didn't reach quorum.",
-    PollIsOpen = "Its poll is still open.",
+    NeverPolled = "Has never been voted on",
+    PollsGone = "No polls longer exist",
+    LowQuorum = "No polls reached quorum",
+    PollIsOpen = "Its poll is still open",
     Accepted = "Accepted",
     Rejected = "Rejected",
 }
 
-export type LawResult = { status: LawResultStatus; law: Law; pc: number };
+export type LawResult = {
+    status: LawResultStatus;
+    law: Law;
+    poll?: Poll;
+    pc?: number;
+    numPolls?: number;
+};
 
 export async function lawResult(law: Law): Promise<LawResult> {
-    if (!law.LatestPollId) {
-        return { status: LawResultStatus.NeverPolled, law, pc: 0 };
+    if (!law.PollIds.length) {
+        return { status: LawResultStatus.NeverPolled, law };
     }
-    const { poll } = await getPoll(law.LatestPollId);
-    if (!poll) {
-        return { status: LawResultStatus.PollNonexist, law, pc: 0 };
+
+    const results = (await Promise.all(law.PollIds.map(getPoll))).flatMap(({ poll }) =>
+        poll ? [calcPollResult(poll)] : [],
+    );
+
+    if (!results.length) {
+        return { status: LawResultStatus.PollsGone, law };
     }
-    const { reachedQuorum, result } = calcPollResult(poll);
-    const pc = ((result.find(o => lawIdRegex.test(o.option))?.average ?? 0) / poll.Width) * 100;
+
+    const polls = results.filter(r => r.reachedQuorum);
+    if (!polls.length) {
+        return { status: LawResultStatus.LowQuorum, law };
+    }
+
+    const closedPoll = polls.find(({ poll }) => !isPollOpen(poll));
+    if (!closedPoll) {
+        return { status: LawResultStatus.PollIsOpen, law };
+    }
+
+    const { averages, poll } = closedPoll;
+    const average = Object.entries(averages).find(([option]) => lawIdRegex.test(option))?.[1] ?? 0;
+    const pc = (average / poll.Width) * 100;
+
     return {
-        status: isPollOpen(poll)
-            ? LawResultStatus.PollIsOpen
-            : !reachedQuorum
-            ? LawResultStatus.LowQuorum
-            : pc >= 50
-            ? LawResultStatus.Accepted
-            : LawResultStatus.Rejected,
+        status: pc >= 50 ? LawResultStatus.Accepted : LawResultStatus.Rejected,
         law,
+        poll,
         pc,
+        numPolls: polls.length,
     };
 }

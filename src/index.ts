@@ -13,25 +13,22 @@ import {
     isPollOpen,
     id2n,
     getLaw,
-    calcPollResult,
     setChatQuorum,
     calcChatQuorum,
-    calcPollQuorum,
 } from "./db.ts";
 import { LawResultStatus, lawResult } from "./LawResult.ts";
 import { makeConstitution } from "./MakeConstitution.ts";
 import { exec } from "https://deno.land/x/2exec/mod.ts";
 import { Law, NewItemStatus, Poll, QuorumType, QuorumTypes, VoteStatus } from "./types.ts";
-import { lawText, pollText, showLawResult } from "./display.ts";
+import { lawText, plural, pollText, showLawResult } from "./display.ts";
 import { toMin } from "./dates.ts";
 import { getAllHelp } from "./fs.ts";
+import { calcPollQuorum, calcPollResult } from "./PollResult.ts";
 
 const patrickId = 95914083;
 const pollIdRegex = /^\[([0-9a-zA-Z]+)\]/;
 export const lawIdRegex = /^\(?([0-9a-zA-Z]+)/;
 const notAdminMessage = "You must be a group admin to use this action.";
-
-const plural = (n: number, w: string) => `${n} ${w.replace("_", n != 1 ? "s" : "")}`;
 
 async function handleNewPoll(input: string, { chatId, chatPop, userId }: Ctx): Promise<string> {
     const [period, name, desc, ...options] = input.split("\n").map(str => str.trim());
@@ -63,7 +60,7 @@ async function handleNewPoll(input: string, { chatId, chatPop, userId }: Ctx): P
     return `${pollText(
         poll,
         {},
-    )}\nEither reply with your vote directly to this message\nor message in this chat prior to casting your vote, then use /mine in <a href="https://t.me/MicroVoteBot">this chat</a>.`;
+    )}\nEither reply with your vote directly to this message\nor message in this chat prior to casting your vote, then send <code>/mine</code> to @MicroVoteBot.`;
 }
 
 async function handleVote(
@@ -99,10 +96,9 @@ async function handleResult(input: string): Promise<string> {
         //TODO
         return "This poll is still open; results can only be provided once the poll closes.";
     }
-    const { reachedQuorum, result } = await calcPollResult(poll);
-    const avgs = result.map(r => r.average);
+    const { reachedQuorum, averages } = calcPollResult(poll);
     const numVotes = Object.values(poll.Votes).length;
-    return `${pollText(poll, { options: true, desc: true, amounts: true }, avgs)}
+    return `${pollText(poll, { options: true, desc: true, amounts: true }, Object.values(averages))}
 <b>${plural(numVotes, "vote_")}, ${((numVotes / poll.ChatPop) * 100).toFixed(2)}% turnout</b>
 <b>${reachedQuorum ? "Reached" : "Did not reach"}</b> its quorum of ${calcPollQuorum(poll)} with ${
         poll.ChatPop
@@ -146,7 +142,7 @@ async function handleNewLaw(input: string, { chatId, userId }: Ctx): Promise<str
         TimeSec: secNow(),
         Name: name,
         Body: body.join("\n"),
-        LatestPollId: null,
+        PollIds: [],
     };
     const status = await newLaw(law, chatId, userId);
     if (status != NewItemStatus.Success) {

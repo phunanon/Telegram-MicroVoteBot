@@ -11,7 +11,7 @@ export function closestSingleDuration(secsDuration: number) {
     const s = abs(secsDuration);
     const times = [s / yD, s / moD, s / dD, s / hD, s / mD, s];
     const first = times.findIndex(n => n > 1);
-    return floor(times[first]) + suffixes[first];
+    return first == -1 ? "0s" : floor(times[first]) + suffixes[first];
 }
 
 export function formattedDuration(secsDuration: number): string {

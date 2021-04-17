@@ -43,7 +43,7 @@ export function getLawFromChat(chat: Chat, lawId: number): Law | null {
     return chat.Laws.find(l => l.TimeSec == lawId) ?? null;
 }
 
-const calcQuorum = (chatPop: number, quorum: QuorumType): number =>
+export const calcQuorum = (chatPop: number, quorum: QuorumType): number =>
     eval(`const n = ${chatPop}, sqrt = Math.sqrt, floor = Math.floor, ceil = Math.ceil; ${quorum}`);
 
 export async function calcChatQuorum(
@@ -55,22 +55,6 @@ export async function calcChatQuorum(
         return { quorum: 0, type: "0" };
     }
     return { quorum: calcQuorum(chatPop, chat.Quorum), type: chat.Quorum };
-}
-
-export const calcPollQuorum = (poll: Poll): number => calcQuorum(poll.ChatPop, poll.Quorum);
-
-export function calcPollResult(
-    poll: Poll,
-): { reachedQuorum: boolean; result: { option: string; average: number }[] } {
-    const votes = Object.values(poll.Votes);
-    const sums = votes.reduce(
-        (sums, v) => sums.map((s, i) => s + v.Choices[i]),
-        poll.Options.map(() => 0),
-    );
-    return {
-        reachedQuorum: calcQuorum(poll.ChatPop, poll.Quorum) <= votes.length,
-        result: sums.map((s, i) => ({ option: poll.Options[i], average: s / votes.length })),
-    };
 }
 
 function handleDailyRateLimits(
@@ -113,7 +97,7 @@ export async function newPoll(
     lawIds.forEach(i => {
         const law = getLawFromChat(chat, i);
         if (law) {
-            law.LatestPollId = poll.TimeSec;
+            law.PollIds.unshift(poll.TimeSec);
         }
     });
     await write(chat);

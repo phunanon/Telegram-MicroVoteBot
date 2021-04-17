@@ -1,7 +1,8 @@
 import { PDFDocument, rgb, RGB } from "https://cdn.skypack.dev/pdf-lib@^1.16.0?dts";
 import fontkit from "https://cdn.skypack.dev/@pdf-lib/fontkit@^1.0.0?dts";
-import { LawResult, LawResultStatus } from "./LawResult.ts";
+import { LawResult } from "./LawResult.ts";
 import { n2id } from "./db.ts";
+import { lawResultSuffix } from "./display.ts";
 
 const size = 12,
     margin = size * 3;
@@ -41,7 +42,9 @@ export async function makeConstitution(laws: LawResult[], chatName: string): Pro
     drawText(`Generated at ${dateText} by @MicroVoteBot`, 1, rgb(0.5, 0.5, 0.5));
     nextY += size * 2;
 
-    laws.forEach(({ law, status, pc }) => {
+    laws.forEach(result => {
+        const { law, status } = result;
+
         if (nextY > page.getHeight() - margin * 5) {
             nextY = 0;
             page = pdfDoc.addPage();
@@ -49,11 +52,7 @@ export async function makeConstitution(laws: LawResult[], chatName: string): Pro
 
         drawText(law.Name, 1.5, rgb(0.5, 0.5, 1));
 
-        const statusStr = `(${n2id(law.TimeSec)}) ${status}${
-            [LawResultStatus.Accepted, LawResultStatus.Rejected].includes(status)
-                ? ` at ${pc.toFixed(2)}% approval.`
-                : ""
-        }`;
+        const statusStr = `(${n2id(law.TimeSec)}) ${status}${lawResultSuffix(result)}.`;
         drawText(statusStr, 1, rgb(0.5, 0.5, 0.5));
 
         drawText(law.Body, 1, rgb(0, 0, 0));

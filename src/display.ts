@@ -3,6 +3,15 @@ import { Law, Poll } from "./types.ts";
 import { formattedDuration, closestSingleDuration } from "./dates.ts";
 import { LawResult, LawResultStatus } from "./LawResult.ts";
 
+export const plural = (n: number, w?: string) =>
+    w
+        ? `${n} ${w.replace("_", n != 1 ? "s" : "")}`
+        : n == 1
+        ? "once"
+        : n == 2
+        ? "twice"
+        : `${n} times`;
+
 type ShowPollOptions = { options?: boolean; desc?: boolean; amounts?: boolean };
 export function pollText(poll: Poll, show: ShowPollOptions, amounts: number[] = []) {
     const options = show.amounts
@@ -30,18 +39,22 @@ export function pollText(poll: Poll, show: ShowPollOptions, amounts: number[] = 
 export const lawText = (law: Law) =>
     `<code>(${n2id(law.TimeSec)})</code> <b>${law.Name}</b>\n${law.Body}`;
 
-export const showLawResult = ({ status, law, pc }: LawResult): string =>
-    `<b>${status}</b>${
-        [LawResultStatus.Accepted, LawResultStatus.Rejected].includes(status)
-            ? ` at ${pc.toFixed(2)}% approval.`
-            : ""
-    }\n${lawText(law)}`;
+export function lawResultSuffix({ status, pc, poll, numPolls }: LawResult) {
+    return [LawResultStatus.Accepted, LawResultStatus.Rejected].includes(status)
+        ? ` with ${(pc ?? 0).toFixed(2)}% approval by [${n2id(
+              poll?.TimeSec ?? 0,
+          )}], voted on ${plural(numPolls ?? 0)}`
+        : "";
+}
+
+export const showLawResult = (result: LawResult): string =>
+    `<b>${result.status}</b>${lawResultSuffix(result)}.\n${lawText(result.law)}`;
 
 function showPollTime(poll: Poll): string {
     const diff = poll.TimeSec + poll.Minutes * 60 - secNow();
-    return `(${formattedDuration(poll.Minutes * 60)}, ${closestSingleDuration(diff)} ${
-        diff > 0 ? "to go" : "ago"
-    })`;
+    return `(${closestSingleDuration(diff)} ${
+        diff > 0 ? "to go of" : "ago for"
+    } ${formattedDuration(poll.Minutes * 60)})`;
 }
 
 const repeatStr = (x: string, n: number): string =>
