@@ -65,7 +65,7 @@ export const QuorumTypes = [
     "3",
     "4",
     "n / 2",
-    "ceil(sqrt(n * 2))",
-    "floor(sqrt(n))",
+    "sqrt(n * 2)",
+    "sqrt(n)",
 ] as const;
 export type QuorumType = typeof QuorumTypes[number];

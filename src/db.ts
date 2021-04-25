@@ -44,7 +44,7 @@ export function getLawFromChat(chat: Chat, lawId: number): Law | null {
 }
 
 export const calcQuorum = (chatPop: number, quorum: QuorumType): number =>
-    eval(`const n = ${chatPop}, sqrt = Math.sqrt, floor = Math.floor, ceil = Math.ceil; ${quorum}`);
+    Math.ceil(eval(`const n = ${chatPop}, {sqrt, floor, ceil} = Math; ${quorum}`));
 
 export async function calcChatQuorum(
     chatPop: number,
@@ -253,5 +253,5 @@ export async function setUserDoNotify(chatId: number, userId: number, doNotify: 
     if (chat) {
         chat.Users[userId].DoNotify = doNotify;
         write(chat);
-    } 
+    }
 }

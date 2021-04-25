@@ -30,7 +30,7 @@ export function pollText(poll: Poll, show: ShowPollOptions, amounts: number[] = 
         )
         .join("");
     return (
-        `<code>[${n2id(poll.TimeSec)}]</code> ${showPollTime(poll)} <b>${poll.Name}</b>` +
+        `<code>[${n2id(poll.TimeSec)}]</code> (${showPollTime(poll)}) <b>${poll.Name}</b>` +
         (show.desc ? `\n${poll.Desc}` : "") +
         (show.options ? optionList : "")
     );
@@ -40,10 +40,10 @@ export const lawText = (law: Law) =>
     `<code>(${n2id(law.TimeSec)})</code> <b>${law.Name}</b>\n${law.Body}`;
 
 export function lawResultSuffix({ status, pc, poll, numPolls }: LawResult) {
-    return [LawResultStatus.Accepted, LawResultStatus.Rejected].includes(status)
-        ? ` with ${(pc ?? 0).toFixed(2)}% approval by [${n2id(
-              poll?.TimeSec ?? 0,
-          )}], voted on ${plural(numPolls ?? 0)}`
+    return [LawResultStatus.Accepted, LawResultStatus.Rejected].includes(status) && poll
+        ? ` with ${(pc ?? 0).toFixed(2)}% approval by [${n2id(poll.TimeSec)}], ${showPollTime(
+              poll,
+          )}, ${poll.Quorum} quorum, voted on ${plural(numPolls ?? 0)}`
         : "";
 }
 
@@ -52,9 +52,9 @@ export const showLawResult = (result: LawResult): string =>
 
 function showPollTime(poll: Poll): string {
     const diff = poll.TimeSec + poll.Minutes * 60 - secNow();
-    return `(${closestSingleDuration(diff)} ${
+    return `${closestSingleDuration(diff)} ${
         diff > 0 ? "to go of" : "ago for"
-    } ${formattedDuration(poll.Minutes * 60)})`;
+    } ${formattedDuration(poll.Minutes * 60)}`;
 }
 
 const repeatStr = (x: string, n: number): string =>
