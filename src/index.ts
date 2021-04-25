@@ -17,6 +17,8 @@ import {
     calcChatQuorum,
     setDailyLimit,
     getDailyLimit,
+    getNotificationUsers,
+    setUserDoNotify,
 } from "./db.ts";
 import { LawResultStatus, lawResult } from "./LawResult.ts";
 import { makeConstitution } from "./MakeConstitution.ts";
@@ -32,7 +34,14 @@ const pollIdRegex = /^\[([0-9a-zA-Z]+)\]/;
 export const lawIdRegex = /^\(?([0-9a-zA-Z]+)/;
 const notAdminMessage = "You must be a group admin to use this action.";
 
-async function handleNewPoll({ input, chatId, chatPop, userId }: Ctx): Promise<string> {
+async function handleNewPoll({
+    input,
+    chatId,
+    chatName,
+    chatPop,
+    userId,
+    sendChatMessage,
+}: Ctx): Promise<string> {
     const [period, name, desc, ...options] = input.split("\n").map(str => str.trim());
     if (!period || !name || !options.length) {
         return await helpFor("newpoll");
@@ -59,6 +68,16 @@ async function handleNewPoll({ input, chatId, chatPop, userId }: Ctx): Promise<s
     if (status != NewItemStatus.Success) {
         return `${status}.`;
     }
+    const toNotify = await getNotificationUsers(chatId);
+    toNotify.forEach(userId => {
+        sendChatMessage(
+            userId,
+            `<b>Poll notification.</b>
+A new poll, <b>${poll.Name}</b>, has been posted in the group chat <b>${chatName}</b>.
+Either vote on it in the group chat, or send a message to the group chat, then return here and send <code>/mine</code>.
+Use <code>/opt_out</code> or <code>/opt_in</code> in the group chat to change your notification preference.`,
+        );
+    });
     return `${pollText(
         poll,
         {},
@@ -210,6 +229,19 @@ async function handleLimit({ chatId, actionName, input, isAdmin }: Ctx) {
     }`;
 }
 
+async function handleNotifyOpt({ actionName, chatId, userId }: Ctx): Promise<string> {
+    if (!["opt_in", "opt_out"].includes(actionName)) {
+        return "";
+    }
+    const optIn = actionName == "opt_in";
+    await setUserDoNotify(chatId, userId, optIn);
+    return `You will ${optIn ? "" : "no longer "}receive poll notifications for this group chat.${
+        optIn
+            ? "\nMake sure you have a chat with @MicroVoteBot otherwise it cannot notify you."
+            : ""
+    }`;
+}
+
 async function handleHelp() {
     const help = await getAllHelp();
     return Object.keys(help)
@@ -234,6 +266,7 @@ type Ctx = {
     chatName: string;
     isAdmin: boolean;
     sendMessage: (text: string) => void;
+    sendChatMessage: (chatId: number, text: string) => void;
 };
 
 enum CommandArea {
@@ -250,15 +283,16 @@ type Command = {
 
 const actions: Command[] = [
     { test: /^\/start/, handler: handleStart, usedIn: CommandArea.Bot },
+    { test: /^\/help/, handler: handleHelp, usedIn: CommandArea.Both },
+    { test: /^\/results?/, handler: handleResult, usedIn: CommandArea.Both },
     { test: /^\/mine/, handler: handleMine, usedIn: CommandArea.Bot },
     { test: /^\/newpoll/, handler: handleNewPoll, usedIn: CommandArea.Group },
-    { test: /^\/result/, handler: handleResult, usedIn: CommandArea.Both },
     { test: /^\/newlaw/, handler: handleNewLaw, usedIn: CommandArea.Group },
     { test: /^\/law\s/, handler: handleLaw, usedIn: CommandArea.Group },
     { test: /^\/laws/, handler: handleLaws, usedIn: CommandArea.Group },
     { test: /^\/quorum/, handler: handleQuorum, usedIn: CommandArea.Group },
     { test: /^\/(poll|law)_limit/, handler: handleLimit, usedIn: CommandArea.Group },
-    { test: /^\/help/, handler: handleHelp, usedIn: CommandArea.Both },
+    { test: /^\/opt_(in|out)/, handler: handleNotifyOpt, usedIn: CommandArea.Group },
 ];
 
 async function handleMessage({
@@ -297,14 +331,21 @@ async function handleMessage({
         logUser(chatId, chatName, userId);
     }
 
-    const sendMessage = async (text: string) =>
-        text &&
-        (await telegram.sendMessage({
+    const sendChatMessage = async (chatId: number, text: string) => {
+        try {
+            if (text) {
+                await telegram.sendMessage({
             chat_id: chatId,
             text,
             parse_mode: "HTML",
             disable_notification: true,
-        }));
+                });
+            }
+        } catch (ex) {
+            console.log(ex);
+        }
+    };
+    const sendMessage = async (text: string) => await sendChatMessage(chatId, text);
     const log = async () =>
         await Deno.writeTextFile(
             "log.txt",
@@ -313,13 +354,14 @@ async function handleMessage({
         );
     const customCtx: Ctx = {
         actionName,
-        input,
+        input: (input || "").trim(),
         chatId,
         userId,
         chatPop,
         chatName,
         isAdmin,
         sendMessage,
+        sendChatMessage,
     };
 
     //Check if user is replying to one of our poll messages (voting)
@@ -332,7 +374,7 @@ async function handleMessage({
                 sendMessage(
                     text == "/result"
                         ? await handleResult({ ...customCtx, input: `[${pollId}]` })
-                        : await handleVote(pollId, customCtx),
+                        : await handleVote(pollId, { ...customCtx, input: text }),
                 );
             }
             return;

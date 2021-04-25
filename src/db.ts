@@ -184,7 +184,11 @@ export async function logUser(chatId: number, chatName: string, userId: number) 
     if (!user) {
         chat.Users = {
             ...chat.Users,
-            [userId]: { LastSeenSec: secNow(), Latest: { PollIds: [], LawIds: [] } },
+            [userId]: <User>{
+                LastSeenSec: secNow(),
+                Latest: { PollIds: [], LawIds: [] },
+                DoNotify: true,
+            },
         };
     } else {
         user.LastSeenSec = secNow();
@@ -229,4 +233,25 @@ export async function setChatQuorum(chatId: number, quorum: QuorumType) {
         chat.Quorum = quorum;
         await write(chat);
     }
+}
+
+async function getChatUsers(chatId: number): Promise<{ id: number; user: User }[]> {
+    const { chat } = await getChat(chatId);
+    return chat
+        ? Object.keys(chat.Users)
+              .map(id => parseInt(id))
+              .map(id => ({ id, user: chat.Users[id] }))
+        : [];
+}
+
+export async function getNotificationUsers(chatId: number) {
+    return (await getChatUsers(chatId)).filter(({ user }) => user.DoNotify).map(({ id }) => id);
+}
+
+export async function setUserDoNotify(chatId: number, userId: number, doNotify: boolean) {
+    const { chat, write } = await getChat(chatId);
+    if (chat) {
+        chat.Users[userId].DoNotify = doNotify;
+        write(chat);
+    } 
 }

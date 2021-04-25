@@ -7,5 +7,7 @@
   "laws": "<code>/laws</code> shows all the voted on and accepted laws in this chat.\n<code>/laws all</code> shows all laws in this chat, regardless of if it was voted on or rejected.",
   "quorum": "Either calculates the existing quorum or accepts a new quorum function for the group chat.",
   "poll_limit": "Either returns the existing number of polls per user per day limit or accepts a new one for the group chat.",
-  "law_limit": "Either returns the existing number of laws per user per day limit or accepts a new one for the group chat"
+  "law_limit": "Either returns the existing number of laws per user per day limit or accepts a new one for the group chat",
+  "opt_in": "Gives you a notification for when a new poll has been posted in the group chat.",
+  "opt_out": "Turns off the notifications of <code>/opt_in</code>"
 }

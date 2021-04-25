@@ -40,6 +40,7 @@ export interface User {
         PollIds: number[];
         LawIds: number[];
     };
+    DoNotify: boolean;
 }
 
 export enum VoteStatus {
