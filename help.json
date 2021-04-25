@@ -5,5 +5,7 @@
   "law": "Takes a Law ID and shows information about a law, used like:\n<pre>/law (xxxx) or xxxx</pre>",
   "newlaw": "Creates a new law in this chat. Usage:\n<pre>/newlaw Name\nLegislation body</pre>",
   "laws": "<code>/laws</code> shows all the voted on and accepted laws in this chat.\n<code>/laws all</code> shows all laws in this chat, regardless of if it was voted on or rejected.",
-  "quorum": "Either calculates the existing quorum or accepts a new quorum function for the group chat."
+  "quorum": "Either calculates the existing quorum or accepts a new quorum function for the group chat.",
+  "poll_limit": "Either returns the existing number of polls per user per day limit or accepts a new one for the group chat.",
+  "law_limit": "Either returns the existing number of laws per user per day limit or accepts a new one for the group chat"
 }

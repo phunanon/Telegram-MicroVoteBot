@@ -15,11 +15,13 @@ import {
     getLaw,
     setChatQuorum,
     calcChatQuorum,
+    setDailyLimit,
+    getDailyLimit,
 } from "./db.ts";
 import { LawResultStatus, lawResult } from "./LawResult.ts";
 import { makeConstitution } from "./MakeConstitution.ts";
 import { exec } from "https://deno.land/x/2exec/mod.ts";
-import { Law, NewItemStatus, Poll, QuorumType, QuorumTypes, VoteStatus } from "./types.ts";
+import { Chat, Law, NewItemStatus, Poll, QuorumType, QuorumTypes, VoteStatus } from "./types.ts";
 import { lawText, plural, pollText, showLawResult } from "./display.ts";
 import { toMin } from "./dates.ts";
 import { getAllHelp } from "./fs.ts";
@@ -30,7 +32,7 @@ const pollIdRegex = /^\[([0-9a-zA-Z]+)\]/;
 export const lawIdRegex = /^\(?([0-9a-zA-Z]+)/;
 const notAdminMessage = "You must be a group admin to use this action.";
 
-async function handleNewPoll(input: string, { chatId, chatPop, userId }: Ctx): Promise<string> {
+async function handleNewPoll({ input, chatId, chatPop, userId }: Ctx): Promise<string> {
     const [period, name, desc, ...options] = input.split("\n").map(str => str.trim());
     if (!period || !name || !options.length) {
         return await helpFor("newpoll");
@@ -63,12 +65,7 @@ async function handleNewPoll(input: string, { chatId, chatPop, userId }: Ctx): P
     )}\nEither reply with your vote directly to this message\nor message in this chat prior to casting your vote, then send <code>/mine</code> to @MicroVoteBot.`;
 }
 
-async function handleVote(
-    input: string,
-    pollId: string,
-    userId: number,
-    chatPop: number,
-): Promise<string> {
+async function handleVote(pollId: string, { input, userId, chatPop }: Ctx): Promise<string> {
     const choices = input.split(" ");
     const choiceNums = choices.map(s => parseInt(s));
     if (choiceNums.includes(Number.NaN)) {
@@ -83,7 +80,7 @@ async function handleVote(
     return `${status}.`;
 }
 
-async function handleResult(input: string): Promise<string> {
+async function handleResult({ input }: Ctx): Promise<string> {
     const pollId = input.match(pollIdRegex)?.[1];
     if (!pollId) {
         return "Invalid Poll ID.";
@@ -105,7 +102,7 @@ async function handleResult(input: string): Promise<string> {
     } potential voters.`;
 }
 
-async function handleMine(input: string, { userId, sendMessage }: Ctx): Promise<string> {
+async function handleMine({ userId, sendMessage }: Ctx): Promise<string> {
     const polls = await getUserPolls(userId);
     if (!polls.length) {
         return "There are no polls for you right now.";
@@ -121,7 +118,7 @@ You can re-vote by doing the same again or replying to your own vote message.
 Polls you can vote in now:`;
 }
 
-async function handleLaw(input: string, { chatId }: Ctx): Promise<string> {
+async function handleLaw({ input, chatId }: Ctx): Promise<string> {
     const lawId = input.match(lawIdRegex)?.[1];
     if (!lawId) {
         return "Invalid Law ID.";
@@ -133,7 +130,7 @@ async function handleLaw(input: string, { chatId }: Ctx): Promise<string> {
     return showLawResult(await lawResult(law));
 }
 
-async function handleNewLaw(input: string, { chatId, userId }: Ctx): Promise<string> {
+async function handleNewLaw({ input, chatId, userId }: Ctx): Promise<string> {
     const [name, ...body] = input.split("\n");
     if (!name || !body.length) {
         return await helpFor("law");
@@ -151,7 +148,7 @@ async function handleNewLaw(input: string, { chatId, userId }: Ctx): Promise<str
     return lawText(law);
 }
 
-async function handleLaws(input: string, { chatId, chatName }: Ctx): Promise<string> {
+async function handleLaws({ input, chatId, chatName }: Ctx): Promise<string> {
     const showAll = input.toLowerCase() == "all";
     const allResults = await Promise.all((await getLaws(chatId)).map(lawResult));
     const results = allResults.filter(r => showAll || r.status == LawResultStatus.Accepted);
@@ -164,7 +161,7 @@ async function handleLaws(input: string, { chatId, chatName }: Ctx): Promise<str
     }
 
     const pdfBytes = await makeConstitution(results, chatName);
-    const fileName = `${chatName} ${showAll ? "Laws" : "Constitution"}.pdf`;
+    const fileName = `${chatName} ${showAll ? "All Laws" : "Laws"}.pdf`;
     await Deno.writeFile(fileName, pdfBytes);
     await Deno.writeTextFile(
         "uploadConstitution.sh",
@@ -177,7 +174,7 @@ async function handleLaws(input: string, { chatId, chatName }: Ctx): Promise<str
     return "";
 }
 
-async function handleQuorum(input: string, { chatId, chatPop, isAdmin }: Ctx): Promise<string> {
+async function handleQuorum({ input, chatId, chatPop, isAdmin }: Ctx): Promise<string> {
     if (!input) {
         const { quorum, type } = await calcChatQuorum(chatPop, chatId);
         return `
@@ -197,6 +194,22 @@ Calculated quorum: <b>${quorum}</b>`;
     return `Quorum set: <code>${input}</code>`;
 }
 
+async function handleLimit({ chatId, actionName, input, isAdmin }: Ctx) {
+    const limits: { [act: string]: keyof Chat["DailyLimits"] } = {
+        poll_limit: "MemberPolls",
+        law_limit: "MemberLaws",
+    };
+    if (!Object.keys(limits).includes(actionName)) {
+        return "";
+    }
+    if (input && Number(input) && isAdmin) {
+        await setDailyLimit(chatId, limits[actionName], Number(input));
+    }
+    return `<b>Daily limit per user</b>\n${limits[actionName]}: ${
+        (await getDailyLimit(chatId, limits[actionName])) ?? NaN
+    }`;
+}
+
 async function handleHelp() {
     const help = await getAllHelp();
     return Object.keys(help)
@@ -213,6 +226,8 @@ async function helpFor(what: string): Promise<string> {
 }
 
 type Ctx = {
+    actionName: string;
+    input: string;
     chatId: number;
     userId: number;
     chatPop: number;
@@ -229,7 +244,7 @@ enum CommandArea {
 
 type Command = {
     test: RegExp;
-    handler: (input: string, ctx: Ctx) => Promise<string>;
+    handler: (ctx: Ctx) => Promise<string>;
     usedIn: CommandArea;
 };
 
@@ -242,6 +257,7 @@ const actions: Command[] = [
     { test: /^\/law\s/, handler: handleLaw, usedIn: CommandArea.Group },
     { test: /^\/laws/, handler: handleLaws, usedIn: CommandArea.Group },
     { test: /^\/quorum/, handler: handleQuorum, usedIn: CommandArea.Group },
+    { test: /^\/(poll|law)_limit/, handler: handleLimit, usedIn: CommandArea.Group },
     { test: /^\/help/, handler: handleHelp, usedIn: CommandArea.Both },
 ];
 
@@ -265,7 +281,7 @@ async function handleMessage({
         reply_to_message: reply,
         from: { id: userId },
     } = message;
-    const input = text.replace(/^\/\w+/, "").trim();
+    const [_, actionName, input] = text.match(/^\/(\w+)(?:\s([\s\S]+))?/m)?.values() ?? [];
     const { id: chatId, title: chatTitle } = chat;
     const chatName = chatId > 0 ? "Myself" : chatTitle ?? "Unknown";
     const chatPop =
@@ -295,6 +311,16 @@ async function handleMessage({
             `${JSON.stringify({ updateId, chatId, userId, text })}\n`,
             { append: true },
         );
+    const customCtx: Ctx = {
+        actionName,
+        input,
+        chatId,
+        userId,
+        chatPop,
+        chatName,
+        isAdmin,
+        sendMessage,
+    };
 
     //Check if user is replying to one of our poll messages (voting)
     if (reply?.from?.id == (await telegram.getMe()).id) {
@@ -305,8 +331,8 @@ async function handleMessage({
             if (pollId) {
                 sendMessage(
                     text == "/result"
-                        ? await handleResult(`[${pollId}]`)
-                        : await handleVote(text, pollId, userId, chatPop),
+                        ? await handleResult({ ...customCtx, input: `[${pollId}]` })
+                        : await handleVote(pollId, customCtx),
                 );
             }
             return;
@@ -341,16 +367,7 @@ async function handleMessage({
         return;
     }
 
-    await sendMessage(
-        await action.handler(input, {
-            chatId,
-            userId,
-            chatPop,
-            chatName,
-            isAdmin,
-            sendMessage,
-        }),
-    );
+    await sendMessage(await action.handler(customCtx));
 }
 
 const token = config().BOT_TOKEN;

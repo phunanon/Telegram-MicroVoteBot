@@ -57,7 +57,23 @@ export async function calcChatQuorum(
     return { quorum: calcQuorum(chatPop, chat.Quorum), type: chat.Quorum };
 }
 
-function handleDailyRateLimits(
+export async function setDailyLimit(
+    chatId: number,
+    limitProp: keyof Chat["DailyLimits"],
+    limit: number,
+) {
+    const { chat, write } = await getChat(chatId);
+    if (!chat) {
+        return;
+    }
+    chat.DailyLimits[limitProp] = limit;
+    write(chat);
+}
+
+export const getDailyLimit = async (chatId: number, limitProp: keyof Chat["DailyLimits"]) =>
+    (await getChat(chatId)).chat?.DailyLimits[limitProp];
+
+function dailyLimit(
     chat: Chat,
     timeSec: number,
     userId: number,
@@ -90,7 +106,7 @@ export async function newPoll(
     if (!chat) {
         return NewItemStatus.UnknownError;
     }
-    const rateStatus = handleDailyRateLimits(chat, poll.TimeSec, userId, "PollIds", "MemberPolls");
+    const rateStatus = dailyLimit(chat, poll.TimeSec, userId, "PollIds", "MemberPolls");
     if (rateStatus != NewItemStatus.Success) {
         return rateStatus;
     }
@@ -184,7 +200,7 @@ export async function newLaw(law: Law, chatId: number, userId: number): Promise<
     if (!chat) {
         return NewItemStatus.UnknownError;
     }
-    const rateStatus = handleDailyRateLimits(chat, law.TimeSec, userId, "LawIds", "MemberLaws");
+    const rateStatus = dailyLimit(chat, law.TimeSec, userId, "LawIds", "MemberLaws");
     if (rateStatus != NewItemStatus.Success) {
         return rateStatus;
     }

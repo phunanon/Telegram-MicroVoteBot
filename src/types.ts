@@ -9,10 +9,10 @@ export interface Poll {
     Minutes: number;
     Name: string;
     Desc: string;
-    Options: string[];
     Width: number;
     ChatPop: number;
     Quorum: QuorumType;
+    Options: string[];
     Votes: { [voterId: number]: Vote };
 }
 
@@ -25,13 +25,13 @@ export interface Law {
 
 export interface Chat {
     Name: string;
-    Users: { [userId: number]: User };
-    Laws: Law[];
     Quorum: QuorumType;
     DailyLimits: {
         MemberPolls: number;
         MemberLaws: number;
     };
+    Users: { [userId: number]: User };
+    Laws: Law[];
 }
 
 export interface User {
