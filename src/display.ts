@@ -40,11 +40,16 @@ export const lawText = (law: Law) =>
     `<code>(${n2id(law.TimeSec)})</code> <b>${law.Name}</b>\n${law.Body}`;
 
 export function lawResultSuffix({ status, pc, poll, numPolls }: LawResult) {
-    return [LawResultStatus.Accepted, LawResultStatus.Rejected].includes(status) && poll
-        ? ` with ${(pc ?? 0).toFixed(2)}% approval by [${n2id(poll.TimeSec)}], ${showPollTime(
-              poll,
-          )}, ${poll.Quorum} quorum, voted on ${plural(numPolls ?? 0)}`
-        : "";
+    if (!poll || ![LawResultStatus.Accepted, LawResultStatus.Rejected].includes(status)) {
+        return "";
+    }
+    const approval = (pc ?? 0).toFixed(2);
+    const turnout = Math.floor((numVotes(poll) / poll.ChatPop) * 100);
+    const time = showPollTime(poll);
+    const times = plural(numPolls ?? 0);
+    return `, ${approval}% approval by [${n2id(poll.TimeSec)}], ${turnout}% turnout, ${time}, ${
+        poll.Quorum
+    } quorum, voted on ${times}`;
 }
 
 export const showLawResult = (result: LawResult): string =>
@@ -52,9 +57,9 @@ export const showLawResult = (result: LawResult): string =>
 
 function showPollTime(poll: Poll): string {
     const diff = poll.TimeSec + poll.Minutes * 60 - secNow();
-    return `${closestSingleDuration(diff)} ${
-        diff > 0 ? "to go of" : "ago for"
-    } ${formattedDuration(poll.Minutes * 60)}`;
+    return `${closestSingleDuration(diff)} ${diff > 0 ? "to go of" : "ago for"} ${formattedDuration(
+        poll.Minutes * 60,
+    )}`;
 }
 
 const repeatStr = (x: string, n: number): string =>
@@ -72,3 +77,7 @@ const unicodeHorizontalBar = (width: number, fraction: number) => {
 
 const showChoiceAmount = (n: number, width: number): string =>
     unicodeHorizontalBar(width, n / width);
+
+const numVotes = (poll: Poll): number => {
+    return Object.keys(poll.Votes).length;
+};

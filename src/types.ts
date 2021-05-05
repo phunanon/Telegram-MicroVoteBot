@@ -49,7 +49,7 @@ export enum VoteStatus {
     Expired = "This poll expired",
     Nonexist = "Poll does not exist",
     InvalidNumOptions = "Invalid number of options",
-    InvalidScore = "Scores must be between 1 and 5",
+    InvalidScore = "Scores must be between 0 and 5",
 }
 
 export enum NewItemStatus {

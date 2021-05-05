@@ -335,10 +335,10 @@ async function handleMessage({
         try {
             if (text) {
                 await telegram.sendMessage({
-            chat_id: chatId,
-            text,
-            parse_mode: "HTML",
-            disable_notification: true,
+                    chat_id: chatId,
+                    text,
+                    parse_mode: "HTML",
+                    disable_notification: true,
                 });
             }
         } catch (ex) {
